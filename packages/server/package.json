@@ -1,0 +1,23 @@
+{
+  "name": "@orc-brain/server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@orc-brain/core": "workspace:*",
+    "@orc-brain/shared": "workspace:*",
+    "fastify": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "tsx": "^4.19.2"
+  }
+}

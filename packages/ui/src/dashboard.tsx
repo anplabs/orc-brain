@@ -645,6 +645,15 @@ export function RunDashboard({ runId }: { runId: string | null }) {
     if (live.runState === "done" || live.runState === "failed") loadStatus();
   }, [live.runState, loadStatus]);
 
+  // Auto-refresh: a light reconciliation poll heals missed SSE frames and
+  // dropped connections; terminal runs stop polling.
+  const pollState = live.runState ?? status?.run.state;
+  useEffect(() => {
+    if (!runId || pollState === "done" || pollState === "failed") return;
+    const t = setInterval(loadStatus, 10_000);
+    return () => clearInterval(t);
+  }, [runId, pollState, loadStatus]);
+
   // Countdown ticker while backpressure is engaged.
   useEffect(() => {
     if (!live.backpressure?.engaged) return;

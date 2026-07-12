@@ -163,11 +163,10 @@ export function PlanReview({
 
   useEffect(() => load(), [load]);
 
-  // The feature flow plans in the background (spec 002 §R4): poll while the
-  // goal is planning so the proposed plan appears without a manual refresh.
+  // Auto-refresh: fast while the planner runs in the background (spec 002
+  // §R4), slower otherwise so approvals from other surfaces still show up.
   useEffect(() => {
-    if (goal?.status !== "planning") return;
-    const t = setInterval(load, 3000);
+    const t = setInterval(load, goal?.status === "planning" ? 3000 : 10_000);
     return () => clearInterval(t);
   }, [goal?.status, load]);
 
@@ -357,6 +356,12 @@ export function Reports({ runId }: { runId: string | null }) {
     load();
   }, [runId, load]);
 
+  // Auto-refresh: interval/final reports land server-side without user action.
+  useEffect(() => {
+    const t = setInterval(load, 15_000);
+    return () => clearInterval(t);
+  }, [load]);
+
   const generate = async () => {
     if (!runId) return;
     setBusy(true);
@@ -439,6 +444,12 @@ export function Audit({ runId }: { runId: string | null }) {
   }, [runId]);
 
   useEffect(() => load(), [load]);
+
+  // Auto-refresh: the audit log grows continuously while workers run.
+  useEffect(() => {
+    const t = setInterval(load, 15_000);
+    return () => clearInterval(t);
+  }, [load]);
 
   const kinds = useMemo(
     () => Array.from(new Set(events.map((e) => e.kind))).sort(),

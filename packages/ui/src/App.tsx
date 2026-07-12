@@ -61,6 +61,13 @@ export default function App() {
     });
   }, [refresh]);
 
+  // Auto-refresh the pickers so new goals/runs and state changes appear
+  // without a reload (planning finishes, runs settle, budgets move).
+  useEffect(() => {
+    const t = setInterval(() => void refresh(), 10_000);
+    return () => clearInterval(t);
+  }, [refresh]);
+
   // Keep the goal picker in sync with the selected run.
   useEffect(() => {
     if (!runId) return;

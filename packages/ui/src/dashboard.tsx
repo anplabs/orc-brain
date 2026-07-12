@@ -324,6 +324,35 @@ function Backpressure({ live, now }: { live: LiveState; now: number }) {
   );
 }
 
+/** Task progress at a glance: done/total plus what is moving or stuck. */
+function ProgressSummary({
+  status,
+  live,
+}: {
+  status: RunStatus;
+  live: LiveState;
+}) {
+  const counts: Partial<Record<TaskStatus, number>> = {};
+  for (const t of status.tasks) {
+    const s = live.tasks[t.id]?.status ?? t.status;
+    counts[s] = (counts[s] ?? 0) + 1;
+  }
+  const total = status.tasks.length;
+  const settled =
+    (counts.done ?? 0) + (counts.skipped ?? 0) + (counts.cancelled ?? 0);
+  const parts = [
+    counts.running ? `${counts.running} running` : null,
+    counts.blocked ? `${counts.blocked} blocked` : null,
+    counts.failed ? `${counts.failed} failed` : null,
+  ].filter(Boolean);
+  return (
+    <span className="muted" style={{ whiteSpace: "nowrap" }}>
+      {settled}/{total} tasks done
+      {parts.length > 0 && ` · ${parts.join(" · ")}`}
+    </span>
+  );
+}
+
 /** Proactive pacing banner (spec 002 §R16), next to the backpressure one. */
 function PacingBanner({ live }: { live: LiveState }) {
   const p = live.pacing;
@@ -605,6 +634,17 @@ export function RunDashboard({ runId }: { runId: string | null }) {
     if (live.escalationTick > 0) loadEscalations();
   }, [live.escalationTick, loadEscalations]);
 
+  // Structural changes — a scope settled or a re-plan grew the DAG — refetch
+  // the snapshot so new tasks/scopes appear without a manual refresh.
+  useEffect(() => {
+    if (live.scopeTick > 0 || live.replanCycle > 0) loadStatus();
+  }, [live.scopeTick, live.replanCycle, loadStatus]);
+
+  // A terminal transition refetches once for the final counts and costs.
+  useEffect(() => {
+    if (live.runState === "done" || live.runState === "failed") loadStatus();
+  }, [live.runState, loadStatus]);
+
   // Countdown ticker while backpressure is engaged.
   useEffect(() => {
     if (!live.backpressure?.engaged) return;
@@ -698,6 +738,7 @@ export function RunDashboard({ runId }: { runId: string | null }) {
             {panicArmed ? "Confirm PANIC" : "PANIC"}
           </button>
         </div>
+        <ProgressSummary status={status} live={live} />
         <BudgetBar live={live} />
         <Backpressure live={live} now={now} />
         <PacingBanner live={live} />

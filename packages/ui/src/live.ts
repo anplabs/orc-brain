@@ -194,7 +194,10 @@ function appendTranscript(
 }
 
 export function liveReducer(state: LiveState, action: LiveAction): LiveState {
-  if (action.kind === "seed") return seed(action.status);
+  // Re-seeding (auto-refresh, structural refetch) replaces the snapshot but
+  // keeps the streamed transcripts — they only exist in SSE, not in the API.
+  if (action.kind === "seed")
+    return { ...seed(action.status), transcripts: state.transcripts };
   const e = action.event;
 
   switch (e.type) {

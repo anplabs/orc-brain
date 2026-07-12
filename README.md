@@ -3,7 +3,7 @@
 > A local orchestrator brain for Claude Code sub-agents — **autonomous within
 > bounds, observable always, never destructive in production.**
 
-[![CI](https://github.com/PauloPeregoHQ/orc-brain/actions/workflows/ci.yml/badge.svg)](https://github.com/PauloPeregoHQ/orc-brain/actions/workflows/ci.yml)
+[![CI](https://github.com/anplabs/orc-brain/actions/workflows/ci.yml/badge.svg)](https://github.com/anplabs/orc-brain/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-%3E%3D11-orange.svg)](https://pnpm.io)
@@ -164,7 +164,7 @@ subscription credentials exist on your machine.
 
 ```bash
 # 1. Clone
-git clone https://github.com/PauloPeregoHQ/orc-brain.git
+git clone https://github.com/anplabs/orc-brain.git
 cd orc-brain
 
 # 2. Enable pnpm (skip if you already have pnpm ≥ 11)

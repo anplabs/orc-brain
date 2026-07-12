@@ -22,7 +22,7 @@ API-key paths.
 
 ## 2. Context & Background
 
-- **Where this lives:** `/Users/paulo/git/PauloPeregoHQ/orc-brain` — pnpm monorepo,
+- **Where this lives:** `/Users/paulo/git/anplabs/orc-brain` — pnpm monorepo,
   packages `shared ← core ← {server, cli}`, `ui ← shared`. Read `CLAUDE.md` first; its
   golden rules (subscription-only billing, constructor-injected safety, deny-first
   production, spec-wins) all apply here.

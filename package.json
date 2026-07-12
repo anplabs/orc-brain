@@ -6,13 +6,13 @@
   "type": "module",
   "license": "MIT",
   "author": "Paulo Lima",
-  "homepage": "https://github.com/PauloPeregoHQ/orc-brain#readme",
+  "homepage": "https://github.com/anplabs/orc-brain#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PauloPeregoHQ/orc-brain.git"
+    "url": "git+https://github.com/anplabs/orc-brain.git"
   },
   "bugs": {
-    "url": "https://github.com/PauloPeregoHQ/orc-brain/issues"
+    "url": "https://github.com/anplabs/orc-brain/issues"
   },
   "keywords": [
     "claude",

@@ -10,7 +10,7 @@ are taken seriously.
 **Please do not open a public GitHub issue for a security problem.**
 
 Report privately using GitHub's
-[private vulnerability reporting](https://github.com/PauloPeregoHQ/orc-brain/security/advisories/new)
+[private vulnerability reporting](https://github.com/anplabs/orc-brain/security/advisories/new)
 ("Report a vulnerability" under the repo's **Security** tab). If that is
 unavailable, contact the maintainer privately and we will coordinate a fix.
 

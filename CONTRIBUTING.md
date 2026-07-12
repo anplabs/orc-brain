@@ -29,7 +29,7 @@ gotchas — it's the fastest way to get oriented.
 Requires **Node ≥ 22** and **pnpm ≥ 11** (`corepack enable`).
 
 ```bash
-git clone https://github.com/PauloPeregoHQ/orc-brain.git
+git clone https://github.com/anplabs/orc-brain.git
 cd orc-brain
 pnpm install
 pnpm build

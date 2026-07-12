@@ -143,6 +143,8 @@ export function PlanReview({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [autoPlan, setAutoPlan] = useState(true);
+  /** Approved/settled scopes are hidden once reviewed; toggle to inspect. */
+  const [showApproved, setShowApproved] = useState(false);
   /** Goals already auto-planned this session, so a failure can't loop. */
   const autoPlanned = useRef<Set<string>>(new Set());
 
@@ -242,6 +244,12 @@ export function PlanReview({
   if (!goalId)
     return <div className="empty">Select a goal to review its plan.</div>;
 
+  // Once approved, a scope no longer needs review — keep the screen focused
+  // on what still awaits a decision, with a toggle to inspect the rest.
+  const proposed = scopes.filter((s) => s.status === "proposed");
+  const reviewed = scopes.filter((s) => s.status !== "proposed");
+  const visibleScopes = showApproved ? scopes : proposed;
+
   return (
     <div className="pad">
       {error && <div className="empty">{error}</div>}
@@ -291,14 +299,30 @@ export function PlanReview({
           )}
         </div>
       )}
+      {reviewed.length > 0 && (
+        <div className="toolbar">
+          <span className="muted">
+            {proposed.length} awaiting approval · {reviewed.length} approved or
+            settled
+          </span>
+          <button onClick={() => setShowApproved((s) => !s)}>
+            {showApproved ? "Hide" : "Show"} approved ({reviewed.length})
+          </button>
+        </div>
+      )}
       {scopes.length === 0 ? (
         <div className="empty">
           {goal?.status === "planning"
             ? "Planning in progress… the proposed plan appears here."
             : "No scopes yet. Run the planner to generate a proposed plan."}
         </div>
+      ) : visibleScopes.length === 0 ? (
+        <div className="empty">
+          All scopes are approved and hidden — use “Show approved” to review
+          them.
+        </div>
       ) : (
-        scopes.map((s) => (
+        visibleScopes.map((s) => (
           <ScopeCard
             key={s.id}
             scope={s}

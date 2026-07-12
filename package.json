@@ -1,0 +1,58 @@
+{
+  "name": "orc-brain",
+  "version": "1.0.0",
+  "description": "A local orchestrator brain for Claude Code sub-agents — autonomous within bounds, observable always, never destructive in production.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Paulo Lima",
+  "homepage": "https://github.com/PauloPeregoHQ/orc-brain#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PauloPeregoHQ/orc-brain.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PauloPeregoHQ/orc-brain/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agent-sdk",
+    "orchestrator",
+    "ai-agents",
+    "sub-agents",
+    "safety",
+    "autonomous-agents"
+  ],
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "dev": "pnpm -r --parallel dev",
+    "serve": "node packages/cli/dist/main.js serve --port 4173",
+    "orc": "node packages/cli/dist/main.js"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.10.0",
+      "onFail": "download"
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.7",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^9.1.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.21.0",
+    "vitest": "^3.0.2"
+  }
+}

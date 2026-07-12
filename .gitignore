@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+
+# Reports (keep the directory, ignore its contents)
+reports/*
+!reports/.gitkeep
+
+# Environment
+.env
+.env.*
+
+# Secrets
+firebase-service-account.json
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# Coverage / caches
+coverage/
+.cache/
+.vite/
+
+# IDEA
+.idea/
+
+# Local-only spec framework (personal working docs, never pushed)
+.specs/

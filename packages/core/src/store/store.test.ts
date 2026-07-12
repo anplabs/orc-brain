@@ -123,6 +123,42 @@ describe("Store round-trip", () => {
     store.close();
   });
 
+  it("purge wipes every table, optionally keeping projects (§9)", () => {
+    const store = new Store(":memory:");
+    const project = store.createProject({
+      name: "p",
+      repo_root: "/repo",
+      execution_mode: "in_repo",
+      default_budget_usd: 10,
+      default_concurrency: 2,
+    });
+    const { goal, task } = seed(store);
+    const run = store.createRun({
+      goal_id: goal.id,
+      budget_usd: 10,
+      concurrency_limit: 3,
+    });
+    store.appendEvent({
+      ts: new Date().toISOString(),
+      run_id: run.id,
+      type: "run.state",
+      payload: { state: "running" },
+    });
+
+    const deleted = store.purge({ keep_projects: true });
+    expect(deleted.tasks).toBe(1);
+    expect(deleted.projects).toBeUndefined();
+    expect(store.listGoals()).toHaveLength(0);
+    expect(store.listRuns()).toHaveLength(0);
+    expect(store.getTask(task.id)).toBeNull();
+    expect(store.listEventsSince(0)).toHaveLength(0);
+    expect(store.getProject(project.id)).not.toBeNull();
+
+    expect(store.purge().projects).toBe(1);
+    expect(store.listProjects()).toHaveLength(0);
+    store.close();
+  });
+
   it("demotes running runs on startup (§5 crash recovery)", () => {
     const store = new Store(":memory:");
     const { goal } = seed(store);

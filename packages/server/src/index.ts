@@ -554,6 +554,24 @@ export function createServer(opts: ServerOptions = {}): FastifyInstance {
     return { ok: true, aborted: runs.map((r) => r.id) };
   });
 
+  // Wipes the orc database (`orc purge`). Refused while any run is active or
+  // workers are in flight — they would settle into deleted rows.
+  app.post("/api/purge", async (req, reply) => {
+    const active = store
+      .listRuns()
+      .filter((r) => r.state === "running" || r.state === "pausing");
+    if (active.length > 0 || orchestrator.inFlight > 0) {
+      return reply.code(409).send({
+        error:
+          `cannot purge: ${active.length} active run(s), ` +
+          `${orchestrator.inFlight} worker(s) in flight — pause or panic first`,
+      });
+    }
+    const body = (req.body ?? {}) as { keep_projects?: boolean };
+    const deleted = store.purge({ keep_projects: body.keep_projects === true });
+    return { deleted };
+  });
+
   // --- Kanban board (spec 002 §R17) -----------------------------------------
   // Cards for every task of project goals whose run is non-terminal, plus the
   // most recent terminal run per project so finished work stays visible.

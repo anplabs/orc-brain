@@ -259,6 +259,39 @@ describe("Feature flow (spec 002 §R4–§R5)", () => {
   });
 });
 
+describe("Purge (§9 orc purge)", () => {
+  it("refuses while a run is active, then wipes once paused", async () => {
+    const { app, system } = buildApp();
+    const goal = system.store.createGoal({
+      title: "g",
+      objective: "o",
+      success_criteria: [],
+      constraints: [],
+      out_of_scope: [],
+      repo_root: "/tmp/purge",
+    });
+    const run = system.store.createRun({
+      goal_id: goal.id,
+      budget_usd: 5,
+      concurrency_limit: 1,
+    });
+
+    const refused = await app.inject({ method: "POST", url: "/api/purge" });
+    expect(refused.statusCode).toBe(409);
+
+    system.store.updateRun(run.id, { state: "paused" });
+    const ok = await app.inject({
+      method: "POST",
+      url: "/api/purge",
+      payload: { keep_projects: true },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().deleted.runs).toBe(1);
+    expect(system.store.listGoals()).toHaveLength(0);
+    expect(system.store.listRuns()).toHaveLength(0);
+  });
+});
+
 describe("v2: priority + gc prune_merged", () => {
   it("reprioritizes pending tasks and refuses settled ones", async () => {
     const { app, system } = buildApp();

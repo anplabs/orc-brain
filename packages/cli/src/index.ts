@@ -180,6 +180,35 @@ export function buildCli(): Command {
       console.log(`panicked; aborted ${res.aborted.length} run(s)`);
     });
 
+  // --- orc purge -----------------------------------------------------------
+  program
+    .command("purge")
+    .description("Wipe the orc database (goals, runs, tasks, reports, events)")
+    .option("--keep-projects", "keep the project registry")
+    .option("--yes", "confirm — required, purge is irreversible")
+    .action(async (opts: { keepProjects?: boolean; yes?: boolean }) => {
+      if (!opts.yes) {
+        console.error(
+          "purge deletes every goal, run, task, report and event" +
+            (opts.keepProjects ? " (projects kept)" : ", including projects") +
+            ". Re-run with --yes to confirm.",
+        );
+        process.exit(1);
+      }
+      const { deleted } = await api<{ deleted: Record<string, number> }>(
+        "/api/purge",
+        {
+          method: "POST",
+          body: JSON.stringify({ keep_projects: !!opts.keepProjects }),
+        },
+      );
+      const total = Object.values(deleted).reduce((a, b) => a + b, 0);
+      console.log(`purged ${total} row(s):`);
+      for (const [table, n] of Object.entries(deleted)) {
+        if (n > 0) console.log(`  ${table}: ${n}`);
+      }
+    });
+
   // --- orc plan ------------------------------------------------------------
   const plan = program.command("plan").description("Planner (§3)");
   plan

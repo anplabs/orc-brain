@@ -838,6 +838,39 @@ export class Store {
     return row.n;
   }
 
+  // --- Purge (§9 `orc purge`) ------------------------------------------------
+
+  /**
+   * Wipes the whole database — goals, scopes, tasks, runs, subagents, ledger,
+   * reports, escalations, and the persisted event log — in one transaction,
+   * child tables first so foreign keys hold. With `keep_projects` the project
+   * registry survives; everything else always goes. Returns rows deleted per
+   * table. The caller must ensure no run is active (workers would settle into
+   * deleted rows).
+   */
+  purge(opts: { keep_projects?: boolean } = {}): Record<string, number> {
+    const tables = [
+      "events",
+      "budget_ledger",
+      "subagents",
+      "escalations",
+      "reports",
+      "tasks",
+      "runs",
+      "scopes",
+      "goals",
+      ...(opts.keep_projects ? [] : ["projects"]),
+    ];
+    const deleted: Record<string, number> = {};
+    const tx = this.db.transaction(() => {
+      for (const table of tables) {
+        deleted[table] = this.db.prepare(`DELETE FROM ${table}`).run().changes;
+      }
+    });
+    tx();
+    return deleted;
+  }
+
   /** Returns persisted events with `seq` greater than `afterSeq` for SSE replay. */
   listEventsSince(afterSeq: number, runId?: string): BusEvent[] {
     const rows = (

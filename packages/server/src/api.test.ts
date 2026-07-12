@@ -259,6 +259,36 @@ describe("Feature flow (spec 002 §R4–§R5)", () => {
   });
 });
 
+describe("Plan cancel (§10 plan review)", () => {
+  it("drops the proposed scopes and returns the goal to draft", async () => {
+    const { app, system } = buildApp();
+    const goal = system.store.createGoal({
+      title: "g",
+      objective: "o",
+      success_criteria: [],
+      constraints: [],
+      out_of_scope: [],
+      repo_root: "/tmp/cancel",
+    });
+
+    const planned = await app.inject({
+      method: "POST",
+      url: `/api/goals/${goal.id}/plan`,
+    });
+    expect(planned.statusCode).toBe(200);
+    expect(system.store.listScopesByGoal(goal.id)).toHaveLength(1);
+    expect(system.store.getGoal(goal.id)?.status).toBe("awaiting_approval");
+
+    const cancelled = await app.inject({
+      method: "DELETE",
+      url: `/api/goals/${goal.id}/plan`,
+    });
+    expect(cancelled.statusCode).toBe(200);
+    expect(system.store.listScopesByGoal(goal.id)).toHaveLength(0);
+    expect(system.store.getGoal(goal.id)?.status).toBe("draft");
+  });
+});
+
 describe("Purge (§9 orc purge)", () => {
   it("refuses while a run is active, then wipes once paused", async () => {
     const { app, system } = buildApp();

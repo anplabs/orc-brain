@@ -1,6 +1,6 @@
 /** Plan review, Reports, Audit and Settings screens (§10). */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AuditEvent, Goal, Report, Scope, Task } from "@orc-brain/shared";
 import { api, type DoctorCheck, type RunStatus } from "./api";
 import { renderMarkdown } from "./markdown";
@@ -142,6 +142,9 @@ export function PlanReview({
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [autoPlan, setAutoPlan] = useState(true);
+  /** Goals already auto-planned this session, so a failure can't loop. */
+  const autoPlanned = useRef<Set<string>>(new Set());
 
   const load = useCallback(() => {
     if (!goalId) return;
@@ -166,7 +169,7 @@ export function PlanReview({
     return () => clearInterval(t);
   }, [goal?.status, load]);
 
-  const runPlanner = async () => {
+  const runPlanner = useCallback(async () => {
     if (!goalId) return;
     setBusy(true);
     try {
@@ -176,6 +179,31 @@ export function PlanReview({
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }, [goalId, load]);
+
+  // Auto-plan (opt-out): a draft goal with no scopes starts planning as soon
+  // as it is selected — once per goal per session, so a failure can't loop.
+  useEffect(() => {
+    if (!autoPlan || !goalId || !goal || busy) return;
+    if (goal.status !== "draft" || scopes.length > 0) return;
+    if (autoPlanned.current.has(goalId)) return;
+    autoPlanned.current.add(goalId);
+    void runPlanner();
+  }, [autoPlan, goalId, goal, scopes, busy, runPlanner]);
+
+  const cancelPlan = async () => {
+    if (!goalId) return;
+    if (!confirm("Discard the proposed plan and return the goal to draft?"))
+      return;
+    try {
+      // Mark as auto-planned so the cancelled goal isn't instantly re-planned;
+      // "Run planner" stays available for an explicit re-plan.
+      autoPlanned.current.add(goalId);
+      await api.cancelPlan(goalId);
+      load();
+    } catch (e) {
+      alert((e as Error).message);
     }
   };
 
@@ -225,8 +253,26 @@ export function PlanReview({
             <div className="muted">{goal.objective}</div>
           </div>
           <div className="spacer" />
-          <button disabled={busy} onClick={runPlanner}>
+          <label
+            className="muted"
+            style={{ display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <input
+              type="checkbox"
+              checked={autoPlan}
+              onChange={(e) => setAutoPlan(e.target.checked)}
+            />
+            auto-plan
+          </label>
+          <button disabled={busy} onClick={() => void runPlanner()}>
             {busy ? "Planning…" : "Run planner"}
+          </button>
+          <button
+            className="danger"
+            disabled={!scopes.some((s) => s.status === "proposed")}
+            onClick={cancelPlan}
+          >
+            Cancel plan
           </button>
           <button
             disabled={!scopes.some((s) => s.status === "proposed")}

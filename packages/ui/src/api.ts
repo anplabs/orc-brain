@@ -90,6 +90,10 @@ export const api = {
     req<{ goal: Goal; scopes: Scope[]; tasks: Task[] }>(`/api/goals/${id}`),
   plan: (id: string) =>
     post<{ scopes: Scope[]; tasks: Task[] }>(`/api/goals/${id}/plan`),
+  cancelPlan: (id: string) =>
+    req<{ ok: boolean; goal: Goal }>(`/api/goals/${id}/plan`, {
+      method: "DELETE",
+    }),
   approveGoal: (id: string, startRun = false) =>
     post<{ approved: string[]; run?: Run }>(`/api/goals/${id}/approve`, {
       start_run: startRun,

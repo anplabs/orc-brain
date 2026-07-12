@@ -271,6 +271,19 @@ export class Orchestrator {
   }
 
   /**
+   * Cancels a goal's proposed plan (§10 plan review): drops the proposed
+   * scopes and their tasks and returns the goal to `draft` so it can be
+   * re-planned. Approved/running scopes are never touched
+   * ({@link Store.deleteProposedPlan} only deletes `proposed` ones).
+   */
+  cancelPlan(goalId: string): void {
+    const goal = this.deps.store.getGoal(goalId);
+    if (!goal) throw new Error(`cancelPlan: goal ${goalId} not found`);
+    this.deps.store.deleteProposedPlan(goalId);
+    this.deps.store.updateGoalStatus(goalId, "draft");
+  }
+
+  /**
    * Applies a re-plan cycle's {@link Plan} additively — grows the goal's DAG
    * without deleting existing scopes/tasks (autonomous-loop.md §3.3, G2). Used
    * by the autonomous controller; the plan is already validated by the Planner.

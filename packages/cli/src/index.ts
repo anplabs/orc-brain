@@ -268,6 +268,16 @@ export function buildCli(): Command {
     });
 
   plan
+    .command("cancel <goal-id>")
+    .description(
+      "Cancel the proposed plan: drop proposed scopes, back to draft",
+    )
+    .action(async (goalId: string) => {
+      await api(`/api/goals/${goalId}/plan`, { method: "DELETE" });
+      console.log(`plan cancelled; goal ${goalId} is draft again`);
+    });
+
+  plan
     .command("edit <goal-id>")
     .description("Edit the proposed plan JSON in $EDITOR, re-validate & apply")
     .action(async (goalId: string) => {

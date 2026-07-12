@@ -363,6 +363,17 @@ export function createServer(opts: ServerOptions = {}): FastifyInstance {
     }
   });
 
+  // Cancel a proposed plan (`orc plan cancel`): drops proposed scopes/tasks
+  // and returns the goal to draft so it can be re-planned.
+  app.delete("/api/goals/:id/plan", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!store.getGoal(id)) {
+      return reply.code(404).send({ error: "goal not found" });
+    }
+    orchestrator.cancelPlan(id);
+    return { ok: true, goal: store.getGoal(id) };
+  });
+
   // Approve every proposed scope of a goal at once (`orc approve <goal-id>`).
   // With `start_run: true` (spec 002 §R5) the approval is the single human
   // gate: a run starts immediately with the project's defaults, unattended.

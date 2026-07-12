@@ -91,8 +91,13 @@ export default function App() {
   );
 
   const goalLabel = (g: Goal) => `${g.title} · ${g.status}`;
-  const runLabel = (r: Run) =>
-    `${r.id.slice(-6)} · ${r.state} · $${r.budget_spent_usd.toFixed(2)}/${r.budget_usd.toFixed(0)}`;
+  const runLabel = (r: Run) => {
+    const pct =
+      r.budget_usd > 0
+        ? Math.min(100, (r.budget_spent_usd / r.budget_usd) * 100)
+        : 0;
+    return `${r.id.slice(-6)} · ${r.state} · ${pct.toFixed(0)}% of budget`;
+  };
 
   return (
     <div className="app">

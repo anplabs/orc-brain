@@ -606,8 +606,12 @@ export function buildCli(): Command {
       }>(`/api/runs/${runId}/status`);
       output(!!opts.json, data, () => {
         const r = data.run;
+        const pct =
+          r.budget_usd > 0
+            ? Math.min(100, (r.budget_spent_usd / r.budget_usd) * 100)
+            : 0;
         console.log(
-          `budget $${r.budget_spent_usd.toFixed(4)} / $${r.budget_usd} (${r.budget_state})`,
+          `budget ${pct.toFixed(0)}% used — $${r.budget_spent_usd.toFixed(4)} / $${r.budget_usd} (${r.budget_state})`,
         );
       });
     });
@@ -692,9 +696,13 @@ async function printStatus(runId: string, json: boolean): Promise<void> {
   }>(`/api/runs/${runId}/status`);
   output(json, data, () => {
     const { run, spent_usd, in_flight, task_counts } = data;
+    const pct =
+      run.budget_usd > 0
+        ? Math.min(100, (spent_usd / run.budget_usd) * 100)
+        : 0;
     console.log(
-      `run ${runId} [${run.state}] budget $${spent_usd.toFixed(4)}/$${run.budget_usd} ` +
-        `(${run.budget_state}) · ${in_flight} in-flight`,
+      `run ${runId} [${run.state}] budget ${pct.toFixed(0)}% used ` +
+        `($${spent_usd.toFixed(4)}/$${run.budget_usd}, ${run.budget_state}) · ${in_flight} in-flight`,
     );
     const counts = Object.entries(task_counts)
       .map(([k, v]) => `${k}:${v}`)

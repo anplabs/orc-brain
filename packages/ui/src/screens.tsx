@@ -553,8 +553,13 @@ export function Settings({ runId }: { runId: string | null }) {
         <dl className="kv" style={{ maxWidth: 480 }}>
           <dt>Budget</dt>
           <dd>${status.run.budget_usd.toFixed(2)}</dd>
-          <dt>Spent</dt>
-          <dd>${status.spent_usd.toFixed(2)}</dd>
+          <dt>Used</dt>
+          <dd>
+            {status.run.budget_usd > 0
+              ? `${Math.min(100, (status.spent_usd / status.run.budget_usd) * 100).toFixed(0)}%`
+              : "—"}{" "}
+            (${status.spent_usd.toFixed(2)})
+          </dd>
           <dt>State</dt>
           <dd>{status.run.budget_state}</dd>
           <dt>Concurrency</dt>

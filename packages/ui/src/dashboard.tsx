@@ -295,8 +295,11 @@ function BudgetBar({ live }: { live: LiveState }) {
         />
       </div>
       <div className="budget-label">
-        <span>
-          ${b.spent.toFixed(2)} / ${b.budget.toFixed(2)}
+        {/* Percent of the run budget is the primary reading; USD is an
+            estimate under subscription auth (§7), shown as detail. */}
+        <span title={`$${b.spent.toFixed(4)} of $${b.budget.toFixed(2)}`}>
+          {pct.toFixed(0)}% of budget (${b.spent.toFixed(2)} / $
+          {b.budget.toFixed(2)})
         </span>
         <span>{b.state}</span>
       </div>

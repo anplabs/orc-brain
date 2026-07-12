@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { Command } from "commander";
 import {
   checkProviderEnv,
@@ -320,8 +320,10 @@ export function buildCli(): Command {
     .command("project")
     .description("Registered local repositories orc operates on (spec 002)");
   project
-    .command("add <path>")
-    .description("Register a local git repository as a project")
+    .command("add [path]")
+    .description(
+      "Register a local git repository as a project (default: current directory)",
+    )
     .option("--name <name>", "display name (default: directory basename)")
     .option("--mode <mode>", "execution mode: worktree | in_repo", "in_repo")
     .option("--budget <usd>", "default run budget in USD")
@@ -332,7 +334,7 @@ export function buildCli(): Command {
     )
     .action(
       async (
-        path: string,
+        path: string | undefined,
         opts: {
           name?: string;
           mode: string;
@@ -341,12 +343,13 @@ export function buildCli(): Command {
           autoMerge?: boolean;
         },
       ) => {
+        const repoRoot = resolve(path ?? process.cwd());
         const res = await api<{ project: { id: string; repo_root: string } }>(
           "/api/projects",
           {
             method: "POST",
             body: JSON.stringify({
-              repo_root: path,
+              repo_root: repoRoot,
               name: opts.name,
               execution_mode: opts.mode,
               auto_merge: !!opts.autoMerge,

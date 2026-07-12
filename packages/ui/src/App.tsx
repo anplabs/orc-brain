@@ -1,6 +1,7 @@
 /**
- * orc-brain web UI shell (§10): top nav + goal/run pickers, and the screens
- * (board, projects, dashboard, plan review, reports, audit, settings).
+ * orc-brain web UI shell (§10): grouped sidebar navigation, a context topbar
+ * with goal/run pickers, and the screens (board, projects, dashboard, plan
+ * review, reports, audit, settings).
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -21,14 +22,31 @@ type Tab =
   | "audit"
   | "settings";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "board", label: "Board" },
-  { id: "projects", label: "Projects" },
-  { id: "dashboard", label: "Run" },
-  { id: "plan", label: "Plan review" },
-  { id: "reports", label: "Reports" },
-  { id: "audit", label: "Audit" },
-  { id: "settings", label: "Settings" },
+/** Sidebar navigation, grouped by what the screen operates on. */
+const NAV_GROUPS: {
+  title: string;
+  items: { id: Tab; label: string; icon: string }[];
+}[] = [
+  {
+    title: "Workspace",
+    items: [
+      { id: "board", label: "Board", icon: "▦" },
+      { id: "projects", label: "Projects", icon: "⌂" },
+    ],
+  },
+  {
+    title: "Run",
+    items: [
+      { id: "dashboard", label: "Dashboard", icon: "▶" },
+      { id: "plan", label: "Plan review", icon: "☰" },
+      { id: "reports", label: "Reports", icon: "✎" },
+      { id: "audit", label: "Audit", icon: "✓" },
+    ],
+  },
+  {
+    title: "System",
+    items: [{ id: "settings", label: "Settings", icon: "⚙" }],
+  },
 ];
 
 /** Tabs whose content is global — the run/goal pickers are hidden there. */
@@ -108,125 +126,140 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="topbar">
-        <span className="brand">orc-brain</span>
-        <div className="tabs">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`tab${tab === t.id ? " active" : ""}`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
+      <aside className="sidenav">
+        <div className="brand">orc-brain</div>
+        {NAV_GROUPS.map((group) => (
+          <div className="nav-group" key={group.title}>
+            <div className="nav-group-title">{group.title}</div>
+            {group.items.map((t) => (
+              <button
+                key={t.id}
+                className={`nav-item${tab === t.id ? " active" : ""}`}
+                onClick={() => setTab(t.id)}
+              >
+                <span className="nav-icon">{t.icon}</span>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        ))}
+      </aside>
+
+      <div className="main">
+        <div className="topbar">
+          <span className="screen-title">
+            {
+              NAV_GROUPS.flatMap((g) => g.items).find((t) => t.id === tab)
+                ?.label
+            }
+          </span>
+          <div className="spacer" />
+          {GLOBAL_TABS.includes(tab) ? null : tab === "plan" ? (
+            <div className="picker-group">
+              <label>Goal</label>
+              <select
+                value={goalId ?? ""}
+                onChange={(e) => setGoalId(e.target.value || null)}
+              >
+                <option value="">— select —</option>
+                {goals.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {goalLabel(g)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="picker-group">
+              <label>Run</label>
+              <select
+                value={runId ?? ""}
+                onChange={(e) => setRunId(e.target.value || null)}
+              >
+                <option value="">— select —</option>
+                {sortedRuns.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {runLabel(r)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {!GLOBAL_TABS.includes(tab) && (
+            <button onClick={() => setShowNewRun((s) => !s)}>New run</button>
+          )}
+        </div>
+
+        {showNewRun && (
+          <div className="topbar" style={{ background: "var(--bg-elev)" }}>
+            <div className="picker-group">
+              <label>Goal</label>
+              <select
+                value={goalId ?? ""}
+                onChange={(e) => setGoalId(e.target.value || null)}
+              >
+                <option value="">— select —</option>
+                {goals.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {goalLabel(g)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="picker-group">
+              <label>Budget $</label>
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+                style={{ width: 80 }}
+              />
+            </div>
+            <div className="picker-group">
+              <label>Concurrency</label>
+              <input
+                type="number"
+                min="1"
+                value={concurrency}
+                onChange={(e) => setConcurrency(e.target.value)}
+                style={{ width: 60 }}
+              />
+            </div>
+            <button className="primary" disabled={!goalId} onClick={startRun}>
+              Start run
             </button>
-          ))}
-        </div>
-        <div className="spacer" />
-        {GLOBAL_TABS.includes(tab) ? null : tab === "plan" ? (
-          <div className="picker-group">
-            <label>Goal</label>
-            <select
-              value={goalId ?? ""}
-              onChange={(e) => setGoalId(e.target.value || null)}
-            >
-              <option value="">— select —</option>
-              {goals.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {goalLabel(g)}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="picker-group">
-            <label>Run</label>
-            <select
-              value={runId ?? ""}
-              onChange={(e) => setRunId(e.target.value || null)}
-            >
-              <option value="">— select —</option>
-              {sortedRuns.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {runLabel(r)}
-                </option>
-              ))}
-            </select>
+            <button onClick={() => setShowNewRun(false)}>Cancel</button>
           </div>
         )}
-        {!GLOBAL_TABS.includes(tab) && (
-          <button onClick={() => setShowNewRun((s) => !s)}>New run</button>
-        )}
-      </div>
 
-      {showNewRun && (
-        <div className="topbar" style={{ background: "var(--bg-elev)" }}>
-          <div className="picker-group">
-            <label>Goal</label>
-            <select
-              value={goalId ?? ""}
-              onChange={(e) => setGoalId(e.target.value || null)}
-            >
-              <option value="">— select —</option>
-              {goals.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {goalLabel(g)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="picker-group">
-            <label>Budget $</label>
-            <input
-              type="number"
-              min="0"
-              step="0.5"
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-              style={{ width: 80 }}
+        <div className="screen">
+          {tab === "board" && <Board />}
+          {tab === "projects" && (
+            <Projects
+              onGoalCreated={(gid) => {
+                setGoalId(gid);
+                setTab("plan");
+                void refresh();
+              }}
             />
-          </div>
-          <div className="picker-group">
-            <label>Concurrency</label>
-            <input
-              type="number"
-              min="1"
-              value={concurrency}
-              onChange={(e) => setConcurrency(e.target.value)}
-              style={{ width: 60 }}
+          )}
+          {tab === "dashboard" && <RunDashboard runId={runId} />}
+          {tab === "plan" && (
+            <PlanReview
+              goalId={goalId}
+              onRunStarted={(rid) => {
+                void refresh();
+                setRunId(rid);
+                setTab("dashboard");
+              }}
             />
-          </div>
-          <button className="primary" disabled={!goalId} onClick={startRun}>
-            Start run
-          </button>
-          <button onClick={() => setShowNewRun(false)}>Cancel</button>
+          )}
+          {tab === "reports" && <Reports runId={runId} />}
+          {tab === "audit" && <Audit runId={runId} />}
+          {tab === "settings" && <Settings runId={runId} />}
         </div>
-      )}
-
-      <div className="screen">
-        {tab === "board" && <Board />}
-        {tab === "projects" && (
-          <Projects
-            onGoalCreated={(gid) => {
-              setGoalId(gid);
-              setTab("plan");
-              void refresh();
-            }}
-          />
-        )}
-        {tab === "dashboard" && <RunDashboard runId={runId} />}
-        {tab === "plan" && (
-          <PlanReview
-            goalId={goalId}
-            onRunStarted={(rid) => {
-              void refresh();
-              setRunId(rid);
-              setTab("dashboard");
-            }}
-          />
-        )}
-        {tab === "reports" && <Reports runId={runId} />}
-        {tab === "audit" && <Audit runId={runId} />}
-        {tab === "settings" && <Settings runId={runId} />}
       </div>
     </div>
   );

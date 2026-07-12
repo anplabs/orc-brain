@@ -140,9 +140,16 @@ function TaskNode({ data }: NodeProps<TaskNodeT>) {
       </div>
       <div className="node-meta">
         {badge && (
-          <span className="model-badge" style={{ background: badge.color }}>
+          <span
+            className="model-badge"
+            style={{ background: badge.color }}
+            title={`model: ${live.model}`}
+          >
             {badge.letter}
           </span>
+        )}
+        {live.model && (
+          <span style={{ color: badge?.color }}>{live.model}</span>
         )}
         <span>{live.status}</span>
         <span>·</span>

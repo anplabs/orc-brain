@@ -21,8 +21,9 @@ const COLUMNS: { id: string; label: string; statuses: TaskStatus[] }[] = [
 /** Statuses rendered with an explicit badge inside their column. */
 const BADGED: TaskStatus[] = ["paused", "skipped", "cancelled"];
 
+/** Full model name for the card chip; "—" while the task is unrouted. */
 function modelChip(model: string | null | undefined): string {
-  return (model ?? "?").charAt(0).toUpperCase();
+  return model ?? "—";
 }
 
 export function Board() {

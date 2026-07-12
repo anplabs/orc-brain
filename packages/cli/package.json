@@ -14,10 +14,13 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@orc-brain/core": "workspace:*",
+    "@orc-brain/server": "workspace:*",
     "@orc-brain/shared": "workspace:*",
     "commander": "^13.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.0",
     "tsx": "^4.19.2"
   }
 }

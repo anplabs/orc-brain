@@ -3,6 +3,8 @@ packages:
 
 onlyBuiltDependencies:
   - esbuild
+  - better-sqlite3
 
 allowBuilds:
+  better-sqlite3: true
   esbuild: true

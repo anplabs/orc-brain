@@ -1,10 +1,29 @@
 {
   "name": "orc-brain",
   "version": "1.0.0",
-  "description": "Local orchestrator brain for Claude Code sub-agents.",
+  "description": "A local orchestrator brain for Claude Code sub-agents — autonomous within bounds, observable always, never destructive in production.",
   "private": true,
   "type": "module",
-  "license": "ISC",
+  "license": "MIT",
+  "author": "Paulo Lima",
+  "homepage": "https://github.com/PauloPeregoHQ/orc-brain#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PauloPeregoHQ/orc-brain.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PauloPeregoHQ/orc-brain/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agent-sdk",
+    "orchestrator",
+    "ai-agents",
+    "sub-agents",
+    "safety",
+    "autonomous-agents"
+  ],
   "packageManager": "pnpm@11.10.0",
   "engines": {
     "node": ">=22"
@@ -14,7 +33,9 @@
     "test": "vitest run",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
-    "dev": "pnpm -r --parallel dev"
+    "dev": "pnpm -r --parallel dev",
+    "serve": "node packages/cli/dist/main.js serve --port 4173",
+    "orc": "node packages/cli/dist/main.js"
   },
   "devEngines": {
     "packageManager": {

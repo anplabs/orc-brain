@@ -1,0 +1,47 @@
+name: Bug report
+description: Report a problem with orc-brain
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! **Do not use this for security / safety-bypass
+        issues** — follow [SECURITY.md](../blob/main/SECURITY.md) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands / actions. Include the goal, plan, or run flow if relevant.
+      placeholder: |
+        1. pnpm serve
+        2. pnpm orc goal new ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: CLI output, `orc audit tail`, or server logs. Redact anything sensitive.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Output of `git rev-parse --short HEAD` (or the release).
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Node version (`node -v`), pnpm version (`pnpm -v`).
+    validations:
+      required: true

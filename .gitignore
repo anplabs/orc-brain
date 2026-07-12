@@ -39,3 +39,6 @@ coverage/
 
 # IDEA
 .idea/
+
+# Local-only spec framework (personal working docs, never pushed)
+.specs/

@@ -4,7 +4,7 @@
  * transport over the in-process {@link System} composition root.
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -34,6 +34,23 @@ function isGitRepo(dir: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Appends `.orc/` to the repo's `.gitignore` when one exists, so orc state
+ * written inside a registered repo is never committed. A repo without a
+ * `.gitignore` is left untouched — registration must not create files.
+ */
+function ensureOrcIgnored(repoRoot: string): void {
+  const gitignore = join(repoRoot, ".gitignore");
+  if (!existsSync(gitignore)) return;
+  const content = readFileSync(gitignore, "utf8");
+  const ignored = content
+    .split("\n")
+    .some((line) => /^\/?\.orc\/?$/.test(line.trim()));
+  if (ignored) return;
+  const sep = content.length === 0 || content.endsWith("\n") ? "" : "\n";
+  appendFileSync(gitignore, `${sep}.orc/\n`);
 }
 
 /** Options for {@link createServer}. */
@@ -122,6 +139,7 @@ export function createServer(opts: ServerOptions = {}): FastifyInstance {
         .code(409)
         .send({ error: `project already registered for ${repoRoot}` });
     }
+    ensureOrcIgnored(repoRoot);
     const project = store.createProject({
       name: body.name?.trim() || basename(repoRoot),
       repo_root: repoRoot,

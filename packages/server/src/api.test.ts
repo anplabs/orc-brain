@@ -5,7 +5,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -134,6 +134,58 @@ describe("Projects API (spec 002 §R3)", () => {
       url: `/api/projects/${project.id}`,
     });
     expect(gone.statusCode).toBe(200);
+  });
+
+  it("appends .orc/ to an existing .gitignore on registration", async () => {
+    const { app } = buildApp();
+    const repo = makeRepo();
+    writeFileSync(join(repo, ".gitignore"), "node_modules/\n");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { repo_root: repo },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe(
+      "node_modules/\n.orc/\n",
+    );
+
+    // Idempotent: registering again (different repo state) must not duplicate.
+    const again = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { repo_root: repo },
+    });
+    expect(again.statusCode).toBe(409); // duplicate project, gitignore untouched
+    expect(readFileSync(join(repo, ".gitignore"), "utf8")).toBe(
+      "node_modules/\n.orc/\n",
+    );
+  });
+
+  it("already-ignored and missing .gitignore are left untouched", async () => {
+    const { app } = buildApp();
+
+    const ignoredRepo = makeRepo();
+    writeFileSync(join(ignoredRepo, ".gitignore"), ".orc\n");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { repo_root: ignoredRepo },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(readFileSync(join(ignoredRepo, ".gitignore"), "utf8")).toBe(
+      ".orc\n",
+    );
+
+    const bareRepo = makeRepo();
+    const res2 = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { repo_root: bareRepo },
+    });
+    expect(res2.statusCode).toBe(200);
+    expect(existsSync(join(bareRepo, ".gitignore"))).toBe(false);
   });
 });
 

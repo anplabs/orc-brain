@@ -44,7 +44,7 @@ export interface BoardCardRow {
 }
 
 const JSON_FIELDS = {
-  goals: ["success_criteria", "constraints", "out_of_scope"],
+  goals: ["success_criteria", "constraints", "out_of_scope", "external_ref"],
   scopes: [
     "path_allowlist",
     "path_denylist",
@@ -193,9 +193,14 @@ export class Store {
   createGoal(
     input: Omit<
       Goal,
-      "id" | "created_at" | "updated_at" | "status" | "project_id"
+      | "id"
+      | "created_at"
+      | "updated_at"
+      | "status"
+      | "project_id"
+      | "external_ref"
     > &
-      Partial<Pick<Goal, "status" | "project_id">>,
+      Partial<Pick<Goal, "status" | "project_id" | "external_ref">>,
   ): Goal {
     const goal: Goal = {
       id: ulid(),
@@ -203,17 +208,43 @@ export class Store {
       updated_at: nowIso(),
       status: input.status ?? "draft",
       project_id: input.project_id ?? null,
+      external_ref: input.external_ref ?? null,
       ...input,
     };
     this.db
       .prepare(
         `INSERT INTO goals (id, created_at, updated_at, title, objective,
-          success_criteria, constraints, out_of_scope, project_id, repo_root, status)
+          success_criteria, constraints, out_of_scope, project_id, repo_root,
+          status, external_ref)
          VALUES (@id, @created_at, @updated_at, @title, @objective,
-          @success_criteria, @constraints, @out_of_scope, @project_id, @repo_root, @status)`,
+          @success_criteria, @constraints, @out_of_scope, @project_id, @repo_root,
+          @status, @external_ref)`,
       )
       .run(serialize(goal as unknown as Row, JSON_FIELDS.goals));
     return goal;
+  }
+
+  /**
+   * A non-terminal goal already imported from the same external task — the
+   * duplicate-import guard (spec 003 §R7). Terminal goals don't block a
+   * re-import.
+   */
+  findActiveGoalByExternalRef(
+    provider: string,
+    externalId: string,
+  ): Goal | null {
+    return deserialize<Goal>(
+      this.db
+        .prepare(
+          `SELECT * FROM goals
+           WHERE json_extract(external_ref, '$.provider') = ?
+             AND json_extract(external_ref, '$.id') = ?
+             AND status NOT IN ('done', 'abandoned')
+           ORDER BY created_at DESC LIMIT 1`,
+        )
+        .get(provider, externalId) as Row,
+      JSON_FIELDS.goals,
+    );
   }
 
   getGoal(id: string): Goal | null {

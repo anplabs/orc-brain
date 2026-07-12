@@ -52,6 +52,21 @@ export interface Project extends EntityBase {
   auto_merge: boolean;
 }
 
+/**
+ * Back-reference from a Goal to the external tracker task it was imported
+ * from (spec 003 §R2, §3.5). Null for goals typed by the operator.
+ */
+export interface ExternalRef {
+  /** Plugin name that owns the task (e.g. `"linear"`). */
+  provider: string;
+  /** Provider-native stable id. */
+  id: string;
+  /** Human identifier (e.g. `"ENG-123"`). */
+  identifier: string;
+  url: string;
+  title: string;
+}
+
 /** Goal: the top-level objective (§4). */
 export interface Goal extends EntityBase {
   title: string;
@@ -64,6 +79,8 @@ export interface Goal extends EntityBase {
   /** Denormalized from the project at creation so consumers stay unchanged. */
   repo_root: string;
   status: GoalStatus;
+  /** Origin tracker task when imported via a plugin (spec 003 §R2). */
+  external_ref: ExternalRef | null;
 }
 
 /** Scope: a bounded region of work and the unit of safety config (§4). */
@@ -213,6 +230,8 @@ export interface BudgetLedgerEntry extends EntityBase {
  */
 export interface AuditEvent {
   ts: IsoTimestamp;
+  /** Who acted, when not a worker — e.g. `"plugin:linear"` (spec 003 §R6). */
+  actor?: string;
   run_id: Ulid | null;
   task_id: Ulid | null;
   session_id: string | null;

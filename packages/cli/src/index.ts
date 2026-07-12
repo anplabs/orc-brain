@@ -1,9 +1,15 @@
 /** `orc` CLI — a thin client over the orc-brain HTTP API (§9). */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  mkdtempSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { Command } from "commander";
 import {
   checkProviderEnv,
@@ -464,6 +470,217 @@ export function buildCli(): Command {
       );
     });
 
+  // --- orc plugin (spec 003 §R8): declarations file + secrets ---------------
+  // Declarations are edited locally in `<state-dir>/plugins.json` (the server
+  // reads it at startup); secrets go through the API so the running server
+  // registers redaction/stripping immediately.
+  const plugin = program
+    .command("plugin")
+    .description("Plugins: declared in <state-dir>/plugins.json (spec 003)");
+  plugin
+    .command("list")
+    .description("Loaded plugins and their status (from the running server)")
+    .option("--json", "output JSON")
+    .action(async (opts: { json?: boolean }) => {
+      const { plugins } = await api<{
+        plugins: {
+          name: string;
+          version: string | null;
+          capabilities: string[];
+          enabled: boolean;
+          status: string;
+          error?: string;
+        }[];
+      }>("/api/plugins");
+      output(!!opts.json, { plugins }, () => {
+        if (!plugins.length) {
+          return console.log(
+            "no plugins declared — add one with: orc plugin add linear",
+          );
+        }
+        for (const p of plugins) {
+          console.log(
+            `${p.name.padEnd(12)} ${(p.version ?? "-").padEnd(8)} ` +
+              `${p.status.padEnd(9)} ${p.capabilities.join(",") || "-"}` +
+              (p.error ? `  (${p.error})` : ""),
+          );
+        }
+      });
+    });
+  plugin
+    .command("add <specifier>")
+    .description(
+      "Declare a plugin: a builtin alias (linear) or an absolute module path",
+    )
+    .option("--name <name>", "plugin name (default: the builtin alias)")
+    .option("--disable", "declare it disabled")
+    .option("--state-dir <dir>", "state directory (.orc)")
+    .action(
+      async (
+        specifier: string,
+        opts: { name?: string; disable?: boolean; stateDir?: string },
+      ) => {
+        const name = opts.name ?? specifier;
+        if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+          console.error(
+            `plugin name must be kebab-case — pass one with --name (got "${name}")`,
+          );
+          process.exit(1);
+        }
+        const file = pluginsFilePath(opts.stateDir);
+        const decls = readPluginsFile(file);
+        if (decls.plugins.some((p) => p.name === name)) {
+          console.error(`plugin "${name}" already declared in ${file}`);
+          process.exit(1);
+        }
+        decls.plugins.push({ name, specifier, enabled: !opts.disable });
+        writePluginsFile(file, decls);
+        console.log(`declared "${name}" in ${file}`);
+        console.log("restart `orc serve` to load it");
+      },
+    );
+  plugin
+    .command("rm <name>")
+    .option("--state-dir <dir>", "state directory (.orc)")
+    .action(async (name: string, opts: { stateDir?: string }) => {
+      const file = pluginsFilePath(opts.stateDir);
+      const decls = readPluginsFile(file);
+      const before = decls.plugins.length;
+      decls.plugins = decls.plugins.filter((p) => p.name !== name);
+      if (decls.plugins.length === before) {
+        console.error(`plugin "${name}" not declared in ${file}`);
+        process.exit(1);
+      }
+      writePluginsFile(file, decls);
+      console.log(`removed "${name}"; restart \`orc serve\` to apply`);
+    });
+  for (const verb of ["enable", "disable"] as const) {
+    plugin
+      .command(`${verb} <name>`)
+      .option("--state-dir <dir>", "state directory (.orc)")
+      .action(async (name: string, opts: { stateDir?: string }) => {
+        const file = pluginsFilePath(opts.stateDir);
+        const decls = readPluginsFile(file);
+        const entry = decls.plugins.find((p) => p.name === name);
+        if (!entry) {
+          console.error(`plugin "${name}" not declared in ${file}`);
+          process.exit(1);
+        }
+        entry.enabled = verb === "enable";
+        writePluginsFile(file, decls);
+        console.log(`${verb}d "${name}"; restart \`orc serve\` to apply`);
+      });
+  }
+  const secret = plugin
+    .command("secret")
+    .description("Plugin secrets (stored in <state-dir>/secrets.json, 0600)");
+  secret
+    .command("set <plugin> <key>")
+    .description("Set a secret; the value is read from stdin, never argv")
+    .action(async (pluginName: string, key: string) => {
+      const value = await readSecretFromStdin(`value for ${key}: `);
+      if (!value) {
+        console.error("empty value; aborted");
+        process.exit(1);
+      }
+      await api(`/api/plugins/${pluginName}/secrets`, {
+        method: "POST",
+        body: JSON.stringify({ key, value }),
+      });
+      console.log(`${key} set for ${pluginName}`);
+    });
+  secret
+    .command("unset <plugin> <key>")
+    .action(async (pluginName: string, key: string) => {
+      await api(`/api/plugins/${pluginName}/secrets/${key}`, {
+        method: "DELETE",
+      });
+      console.log(`${key} unset for ${pluginName}`);
+    });
+
+  // --- orc provider (spec 003 §R8): browse & import external tasks ----------
+  const provider = program
+    .command("provider")
+    .description("Task providers exposed by plugins (spec 003)");
+  provider.command("list").action(async () => {
+    const { providers } = await api<{
+      providers: { name: string; capabilities: string[] }[];
+    }>("/api/providers");
+    if (!providers.length) return console.log("no active task providers");
+    for (const p of providers) {
+      console.log(`${p.name}  ${p.capabilities.join(",")}`);
+    }
+  });
+  provider
+    .command("tasks <name>")
+    .description("List external tasks from a provider")
+    .option("--search <q>", "search text")
+    .option("--mine", "only tasks assigned to me")
+    .option("--state <state>", "filter by workflow state name")
+    .option("--team <team>", "filter by team key or name")
+    .option("--limit <n>", "max results")
+    .option("--json", "output JSON")
+    .action(
+      async (
+        name: string,
+        opts: {
+          search?: string;
+          mine?: boolean;
+          state?: string;
+          team?: string;
+          limit?: string;
+          json?: boolean;
+        },
+      ) => {
+        const params = new URLSearchParams();
+        if (opts.search) params.set("search", opts.search);
+        if (opts.mine) params.set("assigned_to_me", "true");
+        if (opts.state) params.set("state", opts.state);
+        if (opts.team) params.set("team", opts.team);
+        if (opts.limit) params.set("limit", opts.limit);
+        const qs = params.toString();
+        const { tasks } = await api<{
+          tasks: {
+            identifier: string;
+            title: string;
+            state: string;
+            url: string;
+          }[];
+        }>(`/api/providers/${name}/tasks${qs ? `?${qs}` : ""}`);
+        output(!!opts.json, { tasks }, () => {
+          if (!tasks.length) return console.log("no tasks found");
+          for (const t of tasks) {
+            console.log(
+              `${t.identifier.padEnd(10)} ${t.state.padEnd(12)} ${t.title}  ${t.url}`,
+            );
+          }
+        });
+      },
+    );
+  provider
+    .command("import <name> <external-id>")
+    .description("Import an external task as a goal and start planning it")
+    .requiredOption("--project <project-id>", "target project")
+    .action(
+      async (name: string, externalId: string, opts: { project: string }) => {
+        const { goal } = await api<{ goal: { id: string } }>(
+          `/api/providers/${name}/import`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              external_id: externalId,
+              project_id: opts.project,
+            }),
+          },
+        );
+        console.log(goal.id);
+        console.log(
+          `planning started; review with: orc plan show ${goal.id} ` +
+            `then approve with: orc approve ${goal.id} --start`,
+        );
+      },
+    );
+
   // --- orc goal new|list|show ----------------------------------------------
   const goal = program.command("goal").description("Goal management");
   goal
@@ -684,6 +901,69 @@ export function buildCli(): Command {
     });
 
   return program;
+}
+
+/** A `plugins.json` declaration entry (spec 003 §R3). */
+interface PluginDecl {
+  name: string;
+  specifier: string;
+  enabled: boolean;
+  settings?: Record<string, unknown>;
+}
+
+/** Resolves `<state-dir>/plugins.json` (default state dir: `<cwd>/.orc`). */
+function pluginsFilePath(stateDir?: string): string {
+  return join(resolve(stateDir ?? join(process.cwd(), ".orc")), "plugins.json");
+}
+
+/** Reads the declarations file, tolerating a missing one. */
+function readPluginsFile(path: string): { plugins: PluginDecl[] } {
+  if (!existsSync(path)) return { plugins: [] };
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+    plugins?: PluginDecl[];
+  };
+  return { plugins: Array.isArray(parsed.plugins) ? parsed.plugins : [] };
+}
+
+/** Writes the declarations file, creating the state dir if needed. */
+function writePluginsFile(path: string, data: { plugins: PluginDecl[] }): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(data, null, 2) + "\n");
+}
+
+/**
+ * Reads a secret from stdin (spec 003 §R8 — never argv, which leaks to `ps`).
+ * Piped input is read whole; interactive input is prompted without echo.
+ */
+async function readSecretFromStdin(promptText: string): Promise<string> {
+  if (!process.stdin.isTTY) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+    return Buffer.concat(chunks).toString("utf8").trim();
+  }
+  process.stderr.write(promptText);
+  return await new Promise<string>((resolvePromise) => {
+    const stdin = process.stdin;
+    stdin.setRawMode(true);
+    stdin.resume();
+    let value = "";
+    const onData = (chunk: Buffer) => {
+      for (const ch of chunk.toString("utf8")) {
+        if (ch === "\n" || ch === "\r") {
+          stdin.setRawMode(false);
+          stdin.pause();
+          stdin.off("data", onData);
+          process.stderr.write("\n");
+          resolvePromise(value);
+          return;
+        }
+        if (ch === "\u0003") process.exit(130); // ^C
+        if (ch === "\u007f" || ch === "\b") value = value.slice(0, -1);
+        else value += ch;
+      }
+    };
+    stdin.on("data", onData);
+  });
 }
 
 /** Resolves the most recent run id from the API. */

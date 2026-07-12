@@ -10,7 +10,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Query } from "@anthropic-ai/claude-agent-sdk";
-import type { Goal, Plan, Project, Run } from "@orc-brain/shared";
+import {
+  PLUGIN_API_VERSION,
+  type ExternalTask,
+  type Goal,
+  type OrcPluginModule,
+  type Plan,
+  type Project,
+  type Run,
+} from "@orc-brain/shared";
 import { createSystem, type System } from "@orc-brain/core";
 import { createServer } from "./index.js";
 
@@ -393,5 +401,192 @@ describe("v2: priority + gc prune_merged", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().pruned_branches).toEqual(["orc/g/merged"]);
+  });
+});
+
+// --- Plugins & providers (spec 003 §R7, §R8) ---------------------------------
+
+const EXTERNAL_TASK: ExternalTask = {
+  provider: "fake",
+  id: "issue-1",
+  identifier: "ENG-1",
+  title: "Add health endpoint",
+  description: "GET /health.",
+  url: "https://tracker.example/ENG-1",
+  state: "Todo",
+  labels: [],
+  updated_at: "2026-07-12T00:00:00.000Z",
+};
+
+function fakeProviderModule(opts: { fail?: boolean } = {}): OrcPluginModule {
+  return {
+    default: () => ({
+      manifest: {
+        name: "fake",
+        version: "1.0.0",
+        apiVersion: PLUGIN_API_VERSION,
+        capabilities: ["task-provider"],
+      },
+      init() {},
+      taskProvider: {
+        listTasks: async () => {
+          if (opts.fail) throw new Error("bad token");
+          return [EXTERNAL_TASK];
+        },
+        getTask: async (id) =>
+          id === EXTERNAL_TASK.id || id === EXTERNAL_TASK.identifier
+            ? EXTERNAL_TASK
+            : null,
+      },
+    }),
+  };
+}
+
+function buildPluginApp(opts: { fail?: boolean } = {}) {
+  const stateDir = mkdtempSync(join(tmpdir(), "orc-state-"));
+  writeFileSync(
+    join(stateDir, "plugins.json"),
+    JSON.stringify({
+      plugins: [{ name: "fake", specifier: "/x/fake.js", enabled: true }],
+    }),
+  );
+  const system = createSystem({
+    stateDir,
+    queryFn: () => fakeStream(),
+    planQueryFn: () => fakeStream({ structured_output: SAMPLE_PLAN }),
+    pluginModules: { fake: fakeProviderModule(opts) },
+  });
+  systems.push(system);
+  const app = createServer({ system, logger: false, uiDist: "/nonexistent" });
+  return { app, system, stateDir };
+}
+
+describe("Plugins & providers API (spec 003 §R7, §R8)", () => {
+  it("lists plugins and providers; empty without plugins.json", async () => {
+    const bare = buildApp();
+    const noPlugins = await bare.app.inject({ url: "/api/plugins" });
+    expect(noPlugins.json().plugins).toEqual([]);
+    const noProviders = await bare.app.inject({ url: "/api/providers" });
+    expect(noProviders.json().providers).toEqual([]);
+
+    const { app } = buildPluginApp();
+    const plugins = await app.inject({ url: "/api/plugins" });
+    expect(plugins.json().plugins[0]).toMatchObject({
+      name: "fake",
+      status: "active",
+    });
+    const providers = await app.inject({ url: "/api/providers" });
+    expect(providers.json().providers).toEqual([
+      { name: "fake", capabilities: ["task-provider"] },
+    ]);
+  });
+
+  it("lists provider tasks; upstream failure is a readable 502", async () => {
+    const { app } = buildPluginApp();
+    const ok = await app.inject({
+      url: "/api/providers/fake/tasks?search=health&assigned_to_me=true",
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().tasks[0]).toMatchObject({ identifier: "ENG-1" });
+
+    const missing = await app.inject({ url: "/api/providers/nope/tasks" });
+    expect(missing.statusCode).toBe(404);
+
+    const broken = buildPluginApp({ fail: true });
+    const failed = await broken.app.inject({
+      url: "/api/providers/fake/tasks",
+    });
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json().error).toMatch(/bad token/);
+  });
+
+  it("imports a task as a goal (202), guards duplicates (409), 404s unknowns", async () => {
+    const { app, system } = buildPluginApp();
+    const repo = makeRepo();
+    const projectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { repo_root: repo },
+    });
+    const project = projectRes.json().project as Project;
+
+    const imported = await app.inject({
+      method: "POST",
+      url: "/api/providers/fake/import",
+      payload: { external_id: "ENG-1", project_id: project.id },
+    });
+    expect(imported.statusCode).toBe(202);
+    const goal = imported.json().goal as Goal;
+    expect(goal.external_ref).toMatchObject({
+      provider: "fake",
+      identifier: "ENG-1",
+    });
+    // Planning kicked off through the shared feature flow (§R4).
+    await waitFor(
+      () => system.store.getGoal(goal.id)?.status === "awaiting_approval",
+    );
+
+    const dup = await app.inject({
+      method: "POST",
+      url: "/api/providers/fake/import",
+      payload: { external_id: "issue-1", project_id: project.id },
+    });
+    expect(dup.statusCode).toBe(409);
+
+    // Terminal goal frees the guard (§R7).
+    system.store.updateGoalStatus(goal.id, "abandoned");
+    const again = await app.inject({
+      method: "POST",
+      url: "/api/providers/fake/import",
+      payload: { external_id: "issue-1", project_id: project.id },
+    });
+    expect(again.statusCode).toBe(202);
+
+    const noTask = await app.inject({
+      method: "POST",
+      url: "/api/providers/fake/import",
+      payload: { external_id: "ENG-404", project_id: project.id },
+    });
+    expect(noTask.statusCode).toBe(404);
+
+    const noProject = await app.inject({
+      method: "POST",
+      url: "/api/providers/fake/import",
+      payload: { external_id: "ENG-1", project_id: "missing" },
+    });
+    expect(noProject.statusCode).toBe(404);
+  });
+
+  it("sets and unsets plugin secrets through the API (spec 003 §R8)", async () => {
+    const { app, system } = buildPluginApp();
+    const set = await app.inject({
+      method: "POST",
+      url: "/api/plugins/fake/secrets",
+      payload: { key: "FAKE_TOKEN", value: "secret-value-123456" },
+    });
+    expect(set.statusCode).toBe(200);
+    expect(set.json().keys).toEqual(["FAKE_TOKEN"]);
+    expect(system.secrets.get("FAKE_TOKEN")).toBe("secret-value-123456");
+
+    const badKey = await app.inject({
+      method: "POST",
+      url: "/api/plugins/fake/secrets",
+      payload: { key: "not_a_key", value: "v-123456" },
+    });
+    expect(badKey.statusCode).toBe(400);
+
+    const unknown = await app.inject({
+      method: "POST",
+      url: "/api/plugins/nope/secrets",
+      payload: { key: "K", value: "v-123456" },
+    });
+    expect(unknown.statusCode).toBe(404);
+
+    const unset = await app.inject({
+      method: "DELETE",
+      url: "/api/plugins/fake/secrets/FAKE_TOKEN",
+    });
+    expect(unset.statusCode).toBe(200);
+    expect(system.secrets.get("FAKE_TOKEN")).toBeUndefined();
   });
 });

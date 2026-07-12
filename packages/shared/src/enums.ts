@@ -106,4 +106,5 @@ export type AuditKind =
   | "escalation"
   | "exemption"
   | "backpressure"
-  | "report";
+  | "report"
+  | "plugin";

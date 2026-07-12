@@ -7,13 +7,16 @@
 import type {
   AuditEvent,
   Escalation,
+  ExternalTask,
   Goal,
+  PluginStatus,
   Project,
   Report,
   Run,
   Scope,
   SubagentRecord,
   Task,
+  TaskQuery,
   TaskStatus,
 } from "@orc-brain/shared";
 
@@ -168,6 +171,31 @@ export const api = {
     }),
 
   panic: () => post<{ ok: boolean; aborted: string[] }>("/api/panic"),
+
+  // Plugins & task providers (spec 003 §R14, §R15).
+  plugins: () =>
+    req<{ plugins: PluginStatus[] }>("/api/plugins").then((r) => r.plugins),
+  providers: () =>
+    req<{ providers: { name: string; capabilities: string[] }[] }>(
+      "/api/providers",
+    ).then((r) => r.providers),
+  providerTasks: (name: string, query: TaskQuery) => {
+    const params = new URLSearchParams();
+    if (query.search) params.set("search", query.search);
+    if (query.assigned_to_me) params.set("assigned_to_me", "true");
+    if (query.state) params.set("state", query.state);
+    if (query.team) params.set("team", query.team);
+    if (query.limit) params.set("limit", String(query.limit));
+    const qs = params.toString();
+    return req<{ tasks: ExternalTask[] }>(
+      `/api/providers/${encodeURIComponent(name)}/tasks${qs ? `?${qs}` : ""}`,
+    ).then((r) => r.tasks);
+  },
+  importProviderTask: (name: string, externalId: string, projectId: string) =>
+    post<{ goal: Goal }>(`/api/providers/${encodeURIComponent(name)}/import`, {
+      external_id: externalId,
+      project_id: projectId,
+    }),
 
   task: (id: string) =>
     req<{ task: Task; subagents: SubagentRecord[] }>(`/api/tasks/${id}`),

@@ -40,9 +40,29 @@ const REDACTIONS: { re: RegExp; replacement: string }[] = [
   },
 ];
 
+/**
+ * Exact secret values registered at runtime — plugin secrets (spec 003 §R5).
+ * Redacted from every string before the pattern pass, so a token that matches
+ * no pattern (e.g. a Linear API key) still never reaches logs or audit.
+ */
+const SECRET_VALUES = new Set<string>();
+
+/** Registers a literal value for redaction (spec 003 §R5). Short values are ignored. */
+export function registerSecretValue(value: string): void {
+  if (value.length >= 6) SECRET_VALUES.add(value);
+}
+
+/** Clears runtime-registered secret values. Test-only. */
+export function clearRegisteredSecretValues(): void {
+  SECRET_VALUES.clear();
+}
+
 /** Redacts secrets from a plain string. */
 export function redactString(input: string): string {
   let out = input;
+  for (const value of SECRET_VALUES) {
+    if (out.includes(value)) out = out.split(value).join("***REDACTED***");
+  }
   for (const { re, replacement } of REDACTIONS) {
     out = out.replace(re, replacement);
   }

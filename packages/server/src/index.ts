@@ -11,8 +11,18 @@ import { execFileSync } from "node:child_process";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
-import type { BusEvent, ProjectExecutionMode } from "@orc-brain/shared";
-import { createSystem, runDoctorSync, type System } from "@orc-brain/core";
+import type {
+  BusEvent,
+  ProjectExecutionMode,
+  TaskQuery,
+} from "@orc-brain/shared";
+import {
+  createSystem,
+  registerSecretValue,
+  registerStrippedEnvKeys,
+  runDoctorSync,
+  type System,
+} from "@orc-brain/core";
 
 /** Expands a leading `~` and resolves to an absolute path (spec 002 §R3). */
 function resolveRepoRoot(input: string): string {
@@ -68,6 +78,33 @@ export interface ServerOptions {
 function sseFrame(event: BusEvent): string {
   return `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
+
+/**
+ * Caps a provider call so an unresponsive tracker yields a readable 502, not
+ * a hang (spec 003 §R7 — upstream timeout ≤ 15 s).
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`provider timed out after ${ms / 1000}s`)),
+      ms,
+    );
+    timer.unref?.();
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/** Timeout for outbound provider calls (spec 003 §R7). */
+const PROVIDER_TIMEOUT_MS = 15_000;
 
 /** Builds the orc-brain HTTP server over an in-process orchestrator system. */
 export function createServer(opts: ServerOptions = {}): FastifyInstance {
@@ -266,23 +303,11 @@ export function createServer(opts: ServerOptions = {}): FastifyInstance {
     if (!objective) {
       return reply.code(400).send({ error: "objective required" });
     }
-    const title =
-      body.title?.trim() ||
-      (objective.length > 80 ? objective.slice(0, 77) + "…" : objective);
-    const goal = orchestrator.createGoal({
-      title,
+    // Shared feature-flow entrypoint (spec 003 §R4): plugin imports use the
+    // same code path, so the two cannot drift. Planning is fire-and-forget.
+    const goal = orchestrator.createFeatureGoal(project, {
       objective,
-      success_criteria: [],
-      constraints: [],
-      out_of_scope: [],
-      project_id: project.id,
-      repo_root: project.repo_root,
-    });
-    // Fire-and-forget: planning is minutes-long; the UI polls goal status. A
-    // planner failure drops the goal back to draft so it can be re-planned.
-    void orchestrator.planGoal(goal.id).catch((err) => {
-      store.updateGoalStatus(goal.id, "draft");
-      app.log.error({ err, goal_id: goal.id }, "feature-flow planning failed");
+      title: body.title,
     });
     return reply.code(202).send({ goal });
   });
@@ -654,6 +679,140 @@ export function createServer(opts: ServerOptions = {}): FastifyInstance {
     const task = store.getTask(id);
     if (!task) return reply.code(404).send({ error: "task not found" });
     return { task, subagents: store.listSubagentsByTask(id) };
+  });
+
+  // --- Plugins & task providers (spec 003 §R7, §R8) -------------------------
+
+  app.get("/api/plugins", async () => {
+    await system.plugins.ready;
+    return { plugins: system.plugins.list() };
+  });
+
+  // Plugin secret set/unset (spec 003 §R8): value arrives in the body (never
+  // argv), localhost-only like everything else. Newly set values are
+  // registered for redaction/stripping immediately — no restart needed.
+  app.post("/api/plugins/:name/secrets", async (req, reply) => {
+    await system.plugins.ready;
+    const { name } = req.params as { name: string };
+    if (!system.plugins.has(name)) {
+      return reply.code(404).send({ error: `unknown plugin "${name}"` });
+    }
+    const body = req.body as { key?: string; value?: string };
+    if (!body.key || typeof body.value !== "string" || !body.value) {
+      return reply.code(400).send({ error: "key and value required" });
+    }
+    try {
+      system.secrets.set(body.key, body.value);
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    registerStrippedEnvKeys([body.key]);
+    registerSecretValue(body.value);
+    return { ok: true, keys: system.secrets.listKeys() };
+  });
+
+  app.delete("/api/plugins/:name/secrets/:key", async (req, reply) => {
+    await system.plugins.ready;
+    const { name, key } = req.params as { name: string; key: string };
+    if (!system.plugins.has(name)) {
+      return reply.code(404).send({ error: `unknown plugin "${name}"` });
+    }
+    try {
+      system.secrets.unset(key);
+    } catch (err) {
+      return reply.code(400).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return { ok: true, keys: system.secrets.listKeys() };
+  });
+
+  app.get("/api/providers", async () => {
+    await system.plugins.ready;
+    return { providers: system.plugins.listTaskProviders() };
+  });
+
+  app.get("/api/providers/:name/tasks", async (req, reply) => {
+    await system.plugins.ready;
+    const { name } = req.params as { name: string };
+    const provider = system.plugins.getTaskProvider(name);
+    if (!provider) {
+      return reply.code(404).send({ error: `unknown provider "${name}"` });
+    }
+    const q = req.query as {
+      search?: string;
+      assigned_to_me?: string;
+      state?: string;
+      team?: string;
+      limit?: string;
+    };
+    const query: TaskQuery = {
+      ...(q.search ? { search: q.search } : {}),
+      ...(q.assigned_to_me === "true" ? { assigned_to_me: true } : {}),
+      ...(q.state ? { state: q.state } : {}),
+      ...(q.team ? { team: q.team } : {}),
+      ...(q.limit && Number.isFinite(Number(q.limit))
+        ? { limit: Number(q.limit) }
+        : {}),
+    };
+    try {
+      const tasks = await withTimeout(
+        provider.listTasks(query),
+        PROVIDER_TIMEOUT_MS,
+      );
+      return { tasks };
+    } catch (err) {
+      // Upstream failure (bad token, outage, timeout) is a 502, never a hang.
+      return reply.code(502).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  // Import an external task as a goal (spec 003 §R7): resolves the task,
+  // guards against duplicate imports, and funnels into the feature flow.
+  app.post("/api/providers/:name/import", async (req, reply) => {
+    await system.plugins.ready;
+    const { name } = req.params as { name: string };
+    const provider = system.plugins.getTaskProvider(name);
+    if (!provider) {
+      return reply.code(404).send({ error: `unknown provider "${name}"` });
+    }
+    const body = req.body as { external_id?: string; project_id?: string };
+    if (!body.external_id || !body.project_id) {
+      return reply
+        .code(400)
+        .send({ error: "external_id and project_id required" });
+    }
+    const project = store.getProject(body.project_id);
+    if (!project) return reply.code(404).send({ error: "project not found" });
+    let task;
+    try {
+      task = await withTimeout(
+        provider.getTask(body.external_id),
+        PROVIDER_TIMEOUT_MS,
+      );
+    } catch (err) {
+      return reply.code(502).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    if (!task) {
+      return reply
+        .code(404)
+        .send({ error: `task "${body.external_id}" not found in ${name}` });
+    }
+    const existing = store.findActiveGoalByExternalRef(task.provider, task.id);
+    if (existing) {
+      return reply.code(409).send({
+        error: `task ${task.identifier} is already imported as goal ${existing.id} (${existing.status})`,
+        goal: existing,
+      });
+    }
+    const goal = await system.plugins.importTask(name, task, project.id);
+    return reply.code(202).send({ goal });
   });
 
   // --- SSE event stream (§10) ---------------------------------------------

@@ -11,10 +11,12 @@
 
 import { execFileSync } from "node:child_process";
 import type {
+  ExternalRef,
   Goal,
   ModelName,
   OrchestratorConfig,
   Plan,
+  Project,
   Run,
   Scope,
   Task,
@@ -207,6 +209,60 @@ export class Orchestrator {
 
   createGoal(input: Parameters<Store["createGoal"]>[0]): Goal {
     return this.deps.store.createGoal(input);
+  }
+
+  /**
+   * Feature flow (spec 002 §R4, spec 003 §R4): creates a goal under a project
+   * and immediately kicks planning, fire-and-forget. The single entrypoint for
+   * `POST /api/projects/:id/goals` and plugin task imports, so the two paths
+   * cannot drift. A planner failure drops the goal back to draft.
+   */
+  createFeatureGoal(
+    project: Project,
+    input: {
+      objective: string;
+      title?: string;
+      external_ref?: ExternalRef | null;
+    },
+  ): Goal {
+    const objective = input.objective.trim();
+    if (!objective) throw new Error("createFeatureGoal: objective required");
+    const title =
+      input.title?.trim() ||
+      (objective.length > 80 ? objective.slice(0, 77) + "…" : objective);
+    const goal = this.deps.store.createGoal({
+      title,
+      objective,
+      success_criteria: [],
+      constraints: [],
+      out_of_scope: [],
+      project_id: project.id,
+      repo_root: project.repo_root,
+      external_ref: input.external_ref ?? null,
+    });
+    // Fire-and-forget: planning is minutes-long; callers poll goal status.
+    void this.planGoal(goal.id).catch((err) => {
+      if (this.stopped) return;
+      this.deps.store.updateGoalStatus(goal.id, "draft");
+      this.deps.audit.record({
+        ts: new Date().toISOString(),
+        run_id: null,
+        task_id: null,
+        session_id: null,
+        kind: "state_change",
+        tool_name: null,
+        tool_input_hash: null,
+        tool_input: null,
+        decision: null,
+        rule_id: null,
+        detail: {
+          action: "feature_planning_failed",
+          goal_id: goal.id,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      });
+    });
+    return goal;
   }
 
   createScope(input: Parameters<Store["createScope"]>[0]): Scope {

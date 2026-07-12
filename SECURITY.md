@@ -34,6 +34,23 @@ regression test (added to the red-team corpus) promptly.
   local API.
 - Escalations that fail to block, or a `bypassPermissions`-equivalent reaching a
   worker.
+- A plugin-declared secret (e.g. `LINEAR_API_KEY`) reaching a worker
+  environment, or its value appearing unredacted in logs, transcripts, or the
+  audit trail (spec 003 §R5).
+
+## Plugin trust model
+
+Plugins (spec 003) run **in-process with the orchestrator's privileges** — a
+plugin can read the state directory, all plugin secrets, and make arbitrary
+network calls. This is a deliberate v1 trust decision: a plugin is code the
+operator explicitly declared in `plugins.json` (no auto-discovery, no remote
+fetching), the same trust class as installing a devDependency. Install only
+plugins you trust. Every externally-visible plugin action is appended to the
+audit log with `actor: "plugin:<name>"`. Sandboxing is deferred, not
+forgotten — it will be revisited before any community plugin directory exists.
+A malicious _third-party plugin you chose to install_ is therefore out of
+scope as a vulnerability; a way for a plugin to load **without** an operator
+declaration is very much in scope.
 
 ## What is out of scope
 

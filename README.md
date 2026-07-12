@@ -33,6 +33,7 @@ Node process, one SQLite file, one browser tab, no infrastructure to babysit.
 - [Your first run — end to end](#your-first-run--end-to-end)
 - [CLI reference](#cli-reference)
 - [Configuration](#configuration)
+- [Plugins](#plugins)
 - [Project layout](#project-layout)
 - [Development](#development)
 - [Contributing](#contributing)
@@ -123,13 +124,14 @@ commands unconditionally.
        CLI `orc`   Web UI (React SPA)
 ```
 
-| Package             | Purpose                                                                                                                        |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `@orc-brain/shared` | Data model, enums, event schemas, config types, plan schema.                                                                   |
-| `@orc-brain/core`   | Orchestrator, planner, worker manager, model router, budget tracker, safety layer, escalation, backpressure, reporting, store. |
-| `@orc-brain/server` | Fastify HTTP API + SSE; serves the SPA. Binds `127.0.0.1`.                                                                     |
-| `@orc-brain/cli`    | `orc` — a thin client over the HTTP API.                                                                                       |
-| `@orc-brain/ui`     | React + Vite + React Flow single-page app.                                                                                     |
+| Package                    | Purpose                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `@orc-brain/shared`        | Data model, enums, event schemas, config types, plan schema.                                                                   |
+| `@orc-brain/core`          | Orchestrator, planner, worker manager, model router, budget tracker, safety layer, escalation, backpressure, reporting, store. |
+| `@orc-brain/server`        | Fastify HTTP API + SSE; serves the SPA. Binds `127.0.0.1`.                                                                     |
+| `@orc-brain/cli`           | `orc` — a thin client over the HTTP API.                                                                                       |
+| `@orc-brain/ui`            | React + Vite + React Flow single-page app.                                                                                     |
+| `@orc-brain/plugin-linear` | The bundled Linear plugin (spec 003) — issue browse/import + status sync. Depends on `shared` only.                            |
 
 The full technical specification is the source of truth:
 **[`specs/001-orchestrator-spec.md`](./specs/001-orchestrator-spec.md)**. When
@@ -346,6 +348,10 @@ for scripting. Exit codes: `0` ok, `1` error, `2` blocked/needs-approval.
 | `orc budget show <run>` · `budget set <run> --usd` | Budget inspection / adjustment.                         |
 | `orc report [run] [--now]`                         | Latest report / force generation.                       |
 | `orc audit tail <run> [--rule <id>]`               | Tail the audit log.                                     |
+| `orc plugin add\|rm\|enable\|disable\|list`        | Declare plugins in `<state-dir>/plugins.json`.          |
+| `orc plugin secret set\|unset <plugin> <KEY>`      | Plugin secrets (value read from stdin, never argv).     |
+| `orc provider tasks <name> [--search --mine …]`    | Browse a provider's external tasks (e.g. Linear).       |
+| `orc provider import <name> <id> --project <id>`   | Import an external task as a goal and start planning.   |
 
 ---
 
@@ -372,6 +378,100 @@ automatically.
 
 ---
 
+## Plugins
+
+orc-brain is extensible through plugins (spec 003). Plugins are ESM modules
+declared in `<state-dir>/plugins.json`, loaded at startup, and given a narrow
+host API: browse projects, subscribe to the event bus, read secrets, and
+create goals through the same feature flow the UI uses. The first standardized
+capability is `task-provider` — connect an external tracker, browse its tasks,
+and import one as a goal.
+
+### Linear (bundled)
+
+```bash
+orc plugin add linear                          # declare the builtin plugin
+orc plugin secret set linear LINEAR_API_KEY    # paste your key (Linear → Settings → API)
+# restart `orc serve`, then:
+orc provider tasks linear --mine               # browse your issues
+orc provider import linear ENG-123 --project <project-id>
+```
+
+The import creates a goal titled `ENG-123: …` with the issue description as
+the objective, and planning starts immediately — review and approve it exactly
+like a typed feature request. While the run progresses the plugin comments on
+the issue and moves it to a `started`-type state; on success it comments a
+summary (cost, scope branches). Set `"settings": { "complete_on_success": true }`
+on the declaration to also move the issue to a `completed`-type state — by
+default a human closes it.
+
+### Declarations & secrets
+
+`<state-dir>/plugins.json`:
+
+```json
+{
+  "plugins": [
+    { "name": "linear", "specifier": "linear", "enabled": true },
+    {
+      "name": "my-tracker",
+      "specifier": "/abs/path/to/plugin/dist/index.js",
+      "enabled": true
+    }
+  ]
+}
+```
+
+`specifier` is a builtin alias (`linear`) or an **absolute path** to a built
+ESM module. Secrets live in `<state-dir>/secrets.json` (mode `0600`,
+enforced); every key a plugin declares in its manifest is stripped from worker
+environments and its value is redacted from logs, transcripts, and the audit
+trail.
+
+### Trust model
+
+Plugins run **in-process with your privileges** — same trust class as a
+devDependency. Nothing loads unless you wrote it into `plugins.json`; there is
+no auto-discovery. Install only plugins you trust, and prefer pinning by
+absolute path to code you have read. Every externally-visible plugin action is
+audited (`actor: "plugin:<name>"`) and mirrored as a `plugin.sync` bus event.
+A broken plugin surfaces as `status: "error"` in `orc plugin list` / Settings
+and never blocks the orchestrator.
+
+### Writing a plugin
+
+The contract lives in `packages/shared/src/plugins.ts` (`OrcPlugin`,
+`PluginHost`, `TaskProvider` — depend on `@orc-brain/shared` only) and
+`packages/plugin-linear` is the reference implementation. A plugin module's
+default export is a factory:
+
+```ts
+import { PLUGIN_API_VERSION, type OrcPlugin } from "@orc-brain/shared";
+
+export default function createMyPlugin(
+  settings: Record<string, unknown>,
+): OrcPlugin {
+  return {
+    manifest: {
+      name: "my-tracker",
+      version: "1.0.0",
+      apiVersion: PLUGIN_API_VERSION,
+      capabilities: ["task-provider"],
+      secrets: ["MY_TRACKER_TOKEN"],
+    },
+    init(host) {
+      /* subscribe to bus events, read host.getSecret("MY_TRACKER_TOKEN") … */
+    },
+    taskProvider: {
+      listTasks: async (query) => [/* normalized ExternalTask[] */],
+      getTask: async (id) => null,
+    },
+  };
+}
+```
+
+---
+
 ## Project layout
 
 ```
@@ -381,7 +481,8 @@ orc-brain/
 │  ├─ core/     # orchestrator, planner, router, budget, safety, store, …
 │  ├─ server/   # Fastify API + SSE (127.0.0.1)
 │  ├─ cli/      # the `orc` command
-│  └─ ui/       # React + React Flow SPA
+│  ├─ ui/       # React + React Flow SPA
+│  └─ plugin-linear/  # bundled Linear plugin (spec 003)
 ├─ specs/       # 001-orchestrator-spec.md — the source of truth
 ├─ docs/        # implementation status
 ├─ reports/     # generated run reports (gitignored)

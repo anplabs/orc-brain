@@ -8,7 +8,7 @@ orc-brain is a **local, single-process orchestrator** for Claude Code sub-agents
 built on `@anthropic-ai/claude-agent-sdk`. It plans a goal into a scope/task DAG,
 dispatches each task to an independent SDK `query()` (one bundled Claude Code CLI
 subprocess per worker), and enforces a deny-first safety layer. It's a pnpm
-monorepo of five TypeScript packages.
+monorepo of six TypeScript packages.
 
 **The spec is the source of truth.** Read
 [`specs/001-orchestrator-spec.md`](./specs/001-orchestrator-spec.md) before making
@@ -34,7 +34,7 @@ are implemented.
 
 ```bash
 pnpm install            # install workspace deps
-pnpm build              # build all packages (shared → core → ui → server → cli)
+pnpm build              # build all packages (shared → plugin-linear → core → ui → server → cli)
 pnpm test               # vitest run (whole monorepo)
 pnpm lint               # eslint + prettier --check  (CI runs this)
 pnpm format             # prettier --write
@@ -73,6 +73,12 @@ Dependency direction: `shared` ← `core` ← {`server`, `cli`}; `ui` ← `share
   - `safety/` — `denyRules.ts` (shell-parsing interception), `envClassifier.ts`,
     `paths.ts`, `redact.ts`, `limitSignals.ts`, `index.ts` (the `SafetyLayer`).
   - `store/` — `schema.ts` (SQLite DDL), `index.ts` (`Store`), `auditLog.ts` (JSONL).
+  - `plugins/` — spec 003: `registry.ts` (loader over `<stateDir>/plugins.json`),
+    `host.ts` (the narrow `PluginHost` facade), `secrets.ts` (0600 secret store).
+    The typed plugin contract lives in `shared/src/plugins.ts`.
+- **`packages/plugin-linear`** — the first plugin (spec 003): Linear GraphQL
+  `task-provider` + issue status sync. Depends on `@orc-brain/shared` **only**;
+  it is the reference for third-party plugins — never import core from it.
 - **`packages/server`** — `index.ts` builds the Fastify app (all REST + the
   `/api/events` SSE endpoint). `main.ts` is the entrypoint. Binds `127.0.0.1`.
 - **`packages/cli`** — `index.ts` builds the commander tree; `client.ts` is the

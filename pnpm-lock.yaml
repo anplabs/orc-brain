@@ -262,6 +262,9 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.201
         version: 0.3.201(@anthropic-ai/sdk@0.110.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+      '@orc-brain/plugin-linear':
+        specifier: workspace:*
+        version: link:../plugin-linear
       '@orc-brain/shared':
         specifier: workspace:*
         version: link:../shared
@@ -284,6 +287,16 @@ importers:
       '@types/shell-quote':
         specifier: ^1.7.5
         version: 1.7.5
+
+  packages/plugin-linear:
+    dependencies:
+      '@orc-brain/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.7
+        version: 22.20.0
 
   packages/server:
     dependencies:

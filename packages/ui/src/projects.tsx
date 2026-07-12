@@ -2,11 +2,180 @@
  * Projects screen (spec 002 §R20): register local repositories, choose the
  * execution mode (worktree | in_repo) and run defaults, and request features —
  * one objective in, planning starts immediately and the Plan tab takes over.
+ * Also hosts the plugin task-import flow (spec 003 §R14): browse a provider's
+ * tasks (e.g. Linear issues) and import one into a project as a goal.
  */
 
 import { useCallback, useEffect, useState } from "react";
-import type { Project } from "@orc-brain/shared";
+import type { ExternalTask, Project } from "@orc-brain/shared";
 import { api } from "./api";
+
+/**
+ * Import flow (spec 003 §R14): provider dropdown → search → pick a task and a
+ * target project → the import funnels into the feature flow and the shell
+ * jumps to plan review. Hidden entirely when no task provider is active.
+ */
+function ImportSection({
+  projects,
+  onGoalCreated,
+}: {
+  projects: Project[];
+  onGoalCreated: (goalId: string) => void;
+}) {
+  const [providers, setProviders] = useState<string[]>([]);
+  const [provider, setProvider] = useState("");
+  const [search, setSearch] = useState("");
+  const [mine, setMine] = useState(false);
+  const [tasks, setTasks] = useState<ExternalTask[] | null>(null);
+  const [projectId, setProjectId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api
+      .providers()
+      .then((p) => {
+        const names = p.map((x) => x.name);
+        setProviders(names);
+        setProvider((prev) => prev || (names[0] ?? ""));
+      })
+      .catch(() => setProviders([]));
+  }, []);
+
+  useEffect(() => {
+    setProjectId((prev) => prev || (projects[0]?.id ?? ""));
+  }, [projects]);
+
+  if (providers.length === 0) return null;
+
+  const load = async () => {
+    if (!provider) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setTasks(
+        await api.providerTasks(provider, {
+          search: search.trim() || undefined,
+          assigned_to_me: mine || undefined,
+        }),
+      );
+    } catch (e) {
+      setTasks(null);
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importTask = async (t: ExternalTask) => {
+    if (!projectId) return alert("Register a project first.");
+    setBusy(true);
+    try {
+      const { goal } = await api.importProviderTask(provider, t.id, projectId);
+      onGoalCreated(goal.id);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ marginBottom: 12 }}>
+      <div className="toolbar" style={{ padding: 0, border: "none" }}>
+        <strong style={{ fontSize: 14 }}>Import a task</strong>
+        <div className="picker-group">
+          <label>Provider</label>
+          <select
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+          >
+            {providers.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="picker-group">
+          <label>Search</label>
+          <input
+            placeholder="issue text…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void load()}
+            style={{ width: 200 }}
+          />
+        </div>
+        <label
+          className="muted"
+          style={{ display: "flex", alignItems: "center", gap: 4 }}
+        >
+          <input
+            type="checkbox"
+            checked={mine}
+            onChange={(e) => setMine(e.target.checked)}
+          />
+          assigned to me
+        </label>
+        <div className="picker-group">
+          <label>Into project</label>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+          >
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button className="primary" disabled={busy} onClick={() => void load()}>
+          {busy ? "Loading…" : "Browse"}
+        </button>
+      </div>
+      {error && (
+        <div className="muted" style={{ color: "#f85149", marginTop: 8 }}>
+          {error}
+        </div>
+      )}
+      {tasks && (
+        <table className="grid" style={{ marginTop: 8 }}>
+          <tbody>
+            {tasks.length === 0 && (
+              <tr>
+                <td className="muted">No tasks found.</td>
+              </tr>
+            )}
+            {tasks.map((t) => (
+              <tr key={t.id}>
+                <td style={{ width: 90 }}>
+                  <a href={t.url} target="_blank" rel="noreferrer">
+                    {t.identifier}
+                  </a>
+                </td>
+                <td style={{ width: 110 }}>
+                  <span className="badge">{t.state}</span>
+                </td>
+                <td>{t.title}</td>
+                <td style={{ width: 80, textAlign: "right" }}>
+                  <button
+                    className="primary"
+                    disabled={busy || !projectId}
+                    onClick={() => void importTask(t)}
+                  >
+                    Import
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
 
 export function Projects({
   onGoalCreated,
@@ -89,6 +258,8 @@ export function Projects({
   return (
     <div className="pad">
       {error && <div className="empty">{error}</div>}
+
+      <ImportSection projects={projects} onGoalCreated={onGoalCreated} />
 
       <div className="toolbar" style={{ flexWrap: "wrap", gap: 8 }}>
         <div className="picker-group">

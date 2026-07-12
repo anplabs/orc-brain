@@ -1,7 +1,14 @@
 /** Plan review, Reports, Audit and Settings screens (§10). */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AuditEvent, Goal, Report, Scope, Task } from "@orc-brain/shared";
+import type {
+  AuditEvent,
+  Goal,
+  PluginStatus,
+  Report,
+  Scope,
+  Task,
+} from "@orc-brain/shared";
 import { api, type DoctorCheck, type RunStatus } from "./api";
 import { renderMarkdown } from "./markdown";
 
@@ -257,6 +264,17 @@ export function PlanReview({
           <div>
             <strong style={{ fontSize: 15 }}>{goal.title}</strong>{" "}
             <span className="badge">{goal.status}</span>
+            {goal.external_ref && (
+              <a
+                className="badge"
+                href={goal.external_ref.url}
+                target="_blank"
+                rel="noreferrer"
+                title={goal.external_ref.title}
+              >
+                {goal.external_ref.provider} · {goal.external_ref.identifier}
+              </a>
+            )}
             <div className="muted">{goal.objective}</div>
           </div>
           <div className="spacer" />
@@ -565,6 +583,7 @@ export function Audit({ runId }: { runId: string | null }) {
 
 export function Settings({ runId }: { runId: string | null }) {
   const [checks, setChecks] = useState<DoctorCheck[]>([]);
+  const [plugins, setPlugins] = useState<PluginStatus[]>([]);
   const [status, setStatus] = useState<RunStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -573,6 +592,10 @@ export function Settings({ runId }: { runId: string | null }) {
       .doctor()
       .then(setChecks)
       .catch((e) => setError((e as Error).message));
+    void api
+      .plugins()
+      .then(setPlugins)
+      .catch(() => setPlugins([]));
   }, []);
 
   useEffect(() => {
@@ -608,6 +631,43 @@ export function Settings({ runId }: { runId: string | null }) {
           )}
         </tbody>
       </table>
+
+      <h3 style={{ marginTop: 24 }}>Plugins</h3>
+      {plugins.length === 0 ? (
+        <div className="muted">
+          No plugins declared. Add one with <code>orc plugin add linear</code>.
+        </div>
+      ) : (
+        <table className="grid" style={{ maxWidth: 720 }}>
+          <tbody>
+            {plugins.map((p) => (
+              <tr key={p.name}>
+                <td style={{ width: 24 }}>
+                  {p.status === "active"
+                    ? "✅"
+                    : p.status === "disabled"
+                      ? "⏸"
+                      : "❌"}
+                </td>
+                <td style={{ width: 140 }}>
+                  <strong>{p.name}</strong>
+                </td>
+                <td style={{ width: 80 }} className="muted">
+                  {p.version ?? "—"}
+                </td>
+                <td style={{ width: 140 }}>
+                  {p.capabilities.map((c) => (
+                    <span className="badge" key={c}>
+                      {c}
+                    </span>
+                  ))}
+                </td>
+                <td className="muted">{p.error ?? p.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       <h3 style={{ marginTop: 24 }}>Backpressure &amp; quarantine</h3>
       {status ? (

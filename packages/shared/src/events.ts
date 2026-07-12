@@ -5,6 +5,7 @@
 
 import type { IsoTimestamp, Ulid } from "./ids.js";
 import type { BudgetState, ModelName, RunState, TaskStatus } from "./enums.js";
+import type { ExternalRef } from "./entities.js";
 
 /** Envelope carried by every bus/SSE event. */
 export interface EventEnvelope<K extends string, P> {
@@ -161,6 +162,22 @@ export type PacingHoldEvent = EventEnvelope<
   }
 >;
 
+/**
+ * A plugin performed (or failed) an outbound sync action against its external
+ * tracker (spec 003 §R9, §R12) — e.g. a Linear comment or state transition.
+ * Published by the plugin host via `host.reportSync`.
+ */
+export type PluginSyncEvent = EventEnvelope<
+  "plugin.sync",
+  {
+    plugin: string;
+    action: string;
+    ref?: ExternalRef;
+    ok: boolean;
+    detail?: string;
+  }
+>;
+
 /** Discriminated union of all bus/SSE events. */
 export type BusEvent =
   | TaskStateEvent
@@ -176,7 +193,8 @@ export type BusEvent =
   | ScopeSettledEvent
   | ReplanCycleEvent
   | GoalEvaluatedEvent
-  | PacingHoldEvent;
+  | PacingHoldEvent
+  | PluginSyncEvent;
 
 /** String literal type of every event kind. */
 export type BusEventType = BusEvent["type"];

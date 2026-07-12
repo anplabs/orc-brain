@@ -31,6 +31,7 @@ const EVENT_TYPES: BusEventType[] = [
   "replan_cycle",
   "goal_evaluated",
   "pacing.hold",
+  "plugin.sync",
 ];
 
 /** Subscribes to `/api/events` for one run, dispatching typed bus events. */
@@ -123,6 +124,13 @@ export interface LiveState {
   } | null;
   /** Engaged proactive pacing gate, if any (spec 002 §R16). */
   pacing: { reason: string; resume_at: string | null } | null;
+  /** Last plugin sync action against an external tracker (spec 003 §R9). */
+  pluginSync: {
+    plugin: string;
+    action: string;
+    ok: boolean;
+    detail?: string;
+  } | null;
 }
 
 export function emptyLiveState(): LiveState {
@@ -138,6 +146,7 @@ export function emptyLiveState(): LiveState {
     replanCycle: 0,
     lastEvaluation: null,
     pacing: null,
+    pluginSync: null,
   };
 }
 
@@ -176,6 +185,7 @@ function seed(status: RunStatus): LiveState {
     replanCycle: status.run.replan_cycle ?? 0,
     lastEvaluation: null,
     pacing: null,
+    pluginSync: null,
   };
 }
 
@@ -338,6 +348,17 @@ export function liveReducer(state: LiveState, action: LiveAction): LiveState {
 
     case "replan_cycle":
       return { ...state, replanCycle: e.payload.cycle };
+
+    case "plugin.sync":
+      return {
+        ...state,
+        pluginSync: {
+          plugin: e.payload.plugin,
+          action: e.payload.action,
+          ok: e.payload.ok,
+          detail: e.payload.detail,
+        },
+      };
 
     case "goal_evaluated":
       return {

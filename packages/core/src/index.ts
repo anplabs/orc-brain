@@ -25,3 +25,6 @@ export * from "./safety/limitSignals.js";
 export * from "./safety/redact.js";
 export * from "./safety/paths.js";
 export * from "./store/index.js";
+export * from "./plugins/secrets.js";
+export * from "./plugins/host.js";
+export * from "./plugins/registry.js";

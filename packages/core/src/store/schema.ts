@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS goals (
   out_of_scope TEXT NOT NULL,
   project_id TEXT,
   repo_root TEXT NOT NULL,
-  status TEXT NOT NULL
+  status TEXT NOT NULL,
+  external_ref TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_goals_project ON goals(project_id);
 
@@ -197,4 +198,5 @@ export const MIGRATION_COLUMNS: ReadonlyArray<{
     ddl: "INTEGER NOT NULL DEFAULT 0",
   },
   { table: "tasks", column: "priority", ddl: "INTEGER NOT NULL DEFAULT 0" },
+  { table: "goals", column: "external_ref", ddl: "TEXT" },
 ];

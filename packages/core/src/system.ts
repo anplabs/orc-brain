@@ -21,6 +21,9 @@ import { Orchestrator } from "./orchestrator.js";
 import { GoalJudge, type CommandRunner } from "./goalJudge.js";
 import { AutoLoop } from "./autoLoop.js";
 import { WorktreeManager, type GitRunner } from "./worktrees.js";
+import { SecretStore } from "./plugins/secrets.js";
+import { PluginRegistry } from "./plugins/registry.js";
+import type { OrcPluginModule } from "@orc-brain/shared";
 
 /** The wired-together orchestrator system. */
 export interface System {
@@ -39,6 +42,10 @@ export interface System {
   worktrees: WorktreeManager;
   audit: AuditLog;
   config: OrchestratorConfig;
+  /** Plugin registry (spec 003 §R3). `plugins.ready` resolves after loading. */
+  plugins: PluginRegistry;
+  /** Plugin secret store (spec 003 §R5). */
+  secrets: SecretStore;
   close(): void;
 }
 
@@ -57,6 +64,10 @@ export interface CreateSystemOptions {
   commandRunner?: CommandRunner;
   /** Injectable git runner for the worktree manager (spec 002 §R7, tests). */
   gitRunner?: GitRunner;
+  /** Injectable plugin modules keyed by name (spec 003 §R3, tests). */
+  pluginModules?: Record<string, OrcPluginModule>;
+  /** Plugin declarations file. Default `<stateDir>/plugins.json` (spec 003 §R3). */
+  pluginsFile?: string;
 }
 
 /**
@@ -131,6 +142,25 @@ export function createSystem(opts: CreateSystemOptions = {}): System {
   });
   orchestrator.setAutoLoop(autoLoop);
 
+  // Plugin host (spec 003 §R3): declared plugins load asynchronously after
+  // boot (`plugins.ready`); a broken plugin surfaces as `status: "error"` and
+  // never blocks the orchestrator. Task imports funnel into the same feature
+  // flow as `POST /api/projects/:id/goals` (§R4).
+  const secrets = new SecretStore(stateDir);
+  const plugins = new PluginRegistry({
+    store,
+    bus,
+    audit,
+    secrets,
+    createFeatureGoal: (projectId, input) => {
+      const project = store.getProject(projectId);
+      if (!project) throw new Error(`project ${projectId} not found`);
+      return orchestrator.createFeatureGoal(project, input);
+    },
+    pluginsFile: opts.pluginsFile ?? join(stateDir, "plugins.json"),
+    modules: opts.pluginModules,
+  });
+
   // Crash recovery (§5): demote any Running/Pausing run to Paused; nothing
   // auto-resumes without an operator command (Open Decision 8).
   store.demoteActiveRunsOnStartup();
@@ -151,7 +181,10 @@ export function createSystem(opts: CreateSystemOptions = {}): System {
     worktrees,
     audit,
     config,
+    plugins,
+    secrets,
     close: () => {
+      plugins.closeAll(); // detach plugin bus listeners before the store closes
       orchestrator.stop();
       reporting.stopAll();
       backpressure.stopAll();

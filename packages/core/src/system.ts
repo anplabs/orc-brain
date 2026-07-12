@@ -59,10 +59,28 @@ export interface CreateSystemOptions {
   gitRunner?: GitRunner;
 }
 
+/**
+ * Applies the `ORC_FORCE_MODEL` environment override (§6 R-F) on top of the
+ * resolved config. An invalid value fails fast rather than silently routing.
+ */
+function withEnvOverrides(config: OrchestratorConfig): OrchestratorConfig {
+  const forced = process.env.ORC_FORCE_MODEL;
+  if (!forced) return config;
+  if (forced !== "haiku" && forced !== "sonnet" && forced !== "opus") {
+    throw new Error(
+      `ORC_FORCE_MODEL must be haiku|sonnet|opus, got "${forced}"`,
+    );
+  }
+  return {
+    ...config,
+    routing: { ...config.routing, force_model: forced },
+  };
+}
+
 /** Builds the full system and performs crash-recovery demotion on startup (§5). */
 export function createSystem(opts: CreateSystemOptions = {}): System {
   const stateDir = opts.stateDir ?? join(process.cwd(), ".orc");
-  const config = opts.config ?? DEFAULT_CONFIG;
+  const config = withEnvOverrides(opts.config ?? DEFAULT_CONFIG);
 
   const store = new Store(join(stateDir, "orc.db"));
   const audit = new AuditLog(auditDirFor(stateDir));

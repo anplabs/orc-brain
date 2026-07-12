@@ -82,8 +82,8 @@ function fromTable(
 
 /**
  * Computes the model for a task (§6). Rule precedence:
- * R1 scope pin → R5 escalation → R6 budget warn cap → R7 rate-limit reroute →
- * R2–R4 static table.
+ * R-F forced model → R1 scope pin → R5 escalation → R6 budget warn cap →
+ * R7 rate-limit reroute → R2–R4 static table.
  */
 export function routeModel(input: {
   task_type: TaskType;
@@ -93,6 +93,16 @@ export function routeModel(input: {
 }): RoutingDecision {
   const { task_type, model_tier, routing } = input;
   const ctx = input.ctx ?? {};
+
+  // R-F: an operator-forced model wins unconditionally — "always use it" means
+  // no escalation, budget cap, or quarantine reroute may move off it.
+  if (routing.force_model) {
+    return {
+      model: routing.force_model,
+      rule_id: "R-F",
+      reason: `force_model configured: always ${routing.force_model}`,
+    };
+  }
   const pinned = tierToModel(model_tier);
 
   // R1: scope pin wins for the base choice, but escalation/reroute can still act.

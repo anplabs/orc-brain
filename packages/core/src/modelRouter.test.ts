@@ -5,6 +5,23 @@ import { DEFAULT_CONFIG } from "./config.js";
 const routing = DEFAULT_CONFIG.routing;
 
 describe("routeModel", () => {
+  it("R-F: a forced model overrides pins, escalation, and quarantine", () => {
+    const forced = { ...routing, force_model: "haiku" as const };
+    const d = routeModel({
+      task_type: "planning",
+      model_tier: "opus",
+      routing: forced,
+      ctx: {
+        attempt: 3,
+        previous_model: "haiku",
+        budget_state: "warn",
+        quarantined: ["haiku"],
+      },
+    });
+    expect(d.model).toBe("haiku");
+    expect(d.rule_id).toBe("R-F");
+  });
+
   it("R1: scope pin wins", () => {
     const d = routeModel({
       task_type: "mechanical",

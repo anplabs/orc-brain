@@ -34,6 +34,12 @@ export interface RoutingConfig {
   rules: RoutingRule[];
   /** Fallback model when no rule matches. */
   default_model: ModelName;
+  /**
+   * When set, every task runs on this model — overrides scope pins, the static
+   * table, and the dynamic escalations (R1–R7). Configurable via the
+   * `ORC_FORCE_MODEL` environment variable on `orc serve`.
+   */
+  force_model?: ModelName | null;
 }
 
 /** Dev-scope posture per destructive rule class (§8.2, Open Decision 5). */

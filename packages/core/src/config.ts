@@ -44,6 +44,8 @@ export const DEFAULT_CONFIG: OrchestratorConfig = {
       },
     ],
     default_model: "sonnet",
+    // No forced model by default; set via config or ORC_FORCE_MODEL (§6 R-F).
+    force_model: null,
   },
   safety: {
     // Default treats any non-local/non-RFC-1918 host as unknown ⇒ production

@@ -4,7 +4,7 @@
  * review, reports, audit, settings).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Goal, Run } from "@orc-brain/shared";
 import { api } from "./api";
 import { RunDashboard } from "./dashboard";
@@ -86,11 +86,21 @@ export default function App() {
     return () => clearInterval(t);
   }, [refresh]);
 
-  // Keep the goal picker in sync with the selected run.
+  // Keep the goal picker in sync with the selected run — but only when the
+  // run selection actually changes. Without this guard the effect also fires
+  // on every 10s pickers refresh (a new `runs` array reference), which would
+  // stomp a goal the user picked in Plan review and snap it back to the
+  // current run's goal — making a freshly created/approved goal impossible to
+  // review or run from the UI.
+  const syncedRunId = useRef<string | null>(null);
   useEffect(() => {
     if (!runId) return;
+    if (syncedRunId.current === runId) return;
     const run = runs.find((r) => r.id === runId);
-    if (run) setGoalId(run.goal_id);
+    if (run) {
+      syncedRunId.current = runId;
+      setGoalId(run.goal_id);
+    }
   }, [runId, runs]);
 
   const startRun = async () => {
@@ -254,6 +264,7 @@ export default function App() {
                 setRunId(rid);
                 setTab("dashboard");
               }}
+              onStartRun={() => void startRun()}
             />
           )}
           {tab === "reports" && <Reports runId={runId} />}

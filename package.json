@@ -35,6 +35,7 @@
     "format": "prettier --write .",
     "dev": "pnpm -r --parallel dev",
     "serve": "node packages/cli/dist/main.js serve --port 4173",
+    "bump": "node scripts/bump.mjs",
     "orc": "node packages/cli/dist/main.js",
     "release": "pnpm build && pnpm test && pnpm lint && pnpm -r publish --access public"
   },

@@ -139,10 +139,13 @@ function ScopeCard({
 export function PlanReview({
   goalId,
   onRunStarted,
+  onStartRun,
 }: {
   goalId: string | null;
   /** Feature flow (spec 002 §R20): jump to the dashboard once the run starts. */
   onRunStarted?: (runId: string) => void;
+  /** Open the New-run panel for an already-approved plan (no proposed scopes). */
+  onStartRun?: () => void;
 }) {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [scopes, setScopes] = useState<Scope[]>([]);
@@ -314,6 +317,16 @@ export function PlanReview({
               Approve &amp; start run
             </button>
           )}
+          {/* Once a plan is approved there are no proposed scopes left, so the
+              approve buttons above are disabled. Offer a direct way to launch
+              a run for the approved plan instead of hunting for "New run". */}
+          {onStartRun &&
+            !scopes.some((s) => s.status === "proposed") &&
+            scopes.some((s) => s.status === "approved") && (
+              <button className="primary" onClick={onStartRun}>
+                Start run
+              </button>
+            )}
         </div>
       )}
       {reviewed.length > 0 && (

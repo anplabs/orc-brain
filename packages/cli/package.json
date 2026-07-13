@@ -1,17 +1,51 @@
 {
-  "name": "@orc-brain/cli",
+  "name": "orc-brain",
   "version": "1.0.0",
-  "private": true,
+  "description": "A local orchestrator brain for Claude Code sub-agents — autonomous within bounds, observable always, never destructive in production.",
   "type": "module",
+  "license": "MIT",
+  "author": "Paulo Lima",
+  "homepage": "https://github.com/anplabs/orc-brain#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anplabs/orc-brain.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/anplabs/orc-brain/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agent-sdk",
+    "orchestrator",
+    "ai-agents",
+    "sub-agents",
+    "safety",
+    "autonomous-agents",
+    "cli"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "orc": "./dist/main.js"
+    "orc": "./dist/main.js",
+    "orc-brain": "./dist/main.js"
+  },
+  "files": [
+    "dist",
+    "ui"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/main.ts",
-    "clean": "rm -rf dist"
+    "prepack": "node -e \"const fs=require('node:fs');fs.rmSync('ui',{recursive:true,force:true});fs.cpSync('../ui/dist','ui',{recursive:true})\"",
+    "clean": "rm -rf dist ui"
   },
   "dependencies": {
     "@orc-brain/core": "workspace:*",

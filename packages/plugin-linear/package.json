@@ -1,8 +1,16 @@
 {
   "name": "@orc-brain/plugin-linear",
   "version": "1.0.0",
-  "private": true,
+  "description": "Linear task-provider plugin for orc-brain (spec 003 reference plugin).",
   "type": "module",
+  "license": "MIT",
+  "author": "Paulo Lima",
+  "homepage": "https://github.com/anplabs/orc-brain#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anplabs/orc-brain.git",
+    "directory": "packages/plugin-linear"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,6 +18,15 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

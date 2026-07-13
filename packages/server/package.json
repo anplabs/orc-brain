@@ -1,10 +1,27 @@
 {
   "name": "@orc-brain/server",
   "version": "1.0.0",
-  "private": true,
+  "description": "Fastify REST + SSE server for orc-brain, serving the API and the web UI.",
   "type": "module",
+  "license": "MIT",
+  "author": "Paulo Lima",
+  "homepage": "https://github.com/anplabs/orc-brain#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anplabs/orc-brain.git",
+    "directory": "packages/server"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/main.ts",

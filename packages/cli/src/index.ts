@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import {
   checkProviderEnv,
@@ -24,13 +25,33 @@ function output(json: boolean, data: unknown, human: () => void): void {
   else human();
 }
 
+/** This package's root (one level above `src/` in dev, `dist/` when built). */
+const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** CLI version, read from package.json so `orc --version` tracks releases. */
+const VERSION = (
+  JSON.parse(readFileSync(join(pkgRoot, "package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
+
+/**
+ * Locates the built web UI: `<pkg>/ui` in the published npm package (bundled
+ * at `prepack`), `packages/ui/dist` when running from the monorepo.
+ */
+function resolveUiDist(): string | undefined {
+  return [join(pkgRoot, "ui"), join(pkgRoot, "..", "ui", "dist")].find((dir) =>
+    existsSync(join(dir, "index.html")),
+  );
+}
+
 /** Builds the `orc` command tree. */
 export function buildCli(): Command {
   const program = new Command();
   program
     .name("orc")
     .description("Local orchestrator brain for Claude Code sub-agents")
-    .version("1.0.0");
+    .version(VERSION);
 
   // --- orc serve -----------------------------------------------------------
   program
@@ -49,7 +70,10 @@ export function buildCli(): Command {
         process.exit(1);
       }
       const { createServer } = await import("@orc-brain/server");
-      const app = createServer({ stateDir: opts.stateDir });
+      const app = createServer({
+        stateDir: opts.stateDir,
+        uiDist: resolveUiDist(),
+      });
       await app.listen({ port: Number(opts.port), host: "127.0.0.1" });
       console.error(`orc serve listening on http://127.0.0.1:${opts.port}`);
     });

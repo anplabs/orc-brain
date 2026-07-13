@@ -8,6 +8,19 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Added — Distribution
+
+- **Global npm install** — `npm install -g orc-brain` now ships the `orc` CLI,
+  the daemon, and the built web UI in one package. The workspace packages
+  (`@orc-brain/shared`, `@orc-brain/plugin-linear`, `@orc-brain/core`,
+  `@orc-brain/server`) are published under the `@orc-brain` scope; the CLI
+  package is `orc-brain` with `orc` and `orc-brain` bins.
+- **Release workflow** — pushing a `v*.*.*` tag publishes every package to npm
+  (`.github/workflows/release.yml`, npm provenance enabled).
+- `orc serve` locates the bundled web UI relative to the installed package (no
+  longer requires running from the repo root), and `orc --version` reads the
+  version from `package.json`.
+
 ### Added — Phase 3 (surfaces)
 
 - **Reporting engine** — store-derived Markdown reports on interval, milestones,

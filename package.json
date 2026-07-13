@@ -1,5 +1,5 @@
 {
-  "name": "orc-brain",
+  "name": "@orc-brain/monorepo",
   "version": "1.0.0",
   "description": "A local orchestrator brain for Claude Code sub-agents — autonomous within bounds, observable always, never destructive in production.",
   "private": true,
@@ -35,7 +35,8 @@
     "format": "prettier --write .",
     "dev": "pnpm -r --parallel dev",
     "serve": "node packages/cli/dist/main.js serve --port 4173",
-    "orc": "node packages/cli/dist/main.js"
+    "orc": "node packages/cli/dist/main.js",
+    "release": "pnpm build && pnpm test && pnpm lint && pnpm -r publish --access public"
   },
   "devEngines": {
     "packageManager": {

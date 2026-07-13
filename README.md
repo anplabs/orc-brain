@@ -4,6 +4,7 @@
 > bounds, observable always, never destructive in production.**
 
 [![CI](https://github.com/anplabs/orc-brain/actions/workflows/ci.yml/badge.svg)](https://github.com/anplabs/orc-brain/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/orc-brain.svg)](https://www.npmjs.com/package/orc-brain)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 [![pnpm](https://img.shields.io/badge/pnpm-%3E%3D11-orange.svg)](https://pnpm.io)
@@ -129,8 +130,8 @@ commands unconditionally.
 | `@orc-brain/shared`        | Data model, enums, event schemas, config types, plan schema.                                                                   |
 | `@orc-brain/core`          | Orchestrator, planner, worker manager, model router, budget tracker, safety layer, escalation, backpressure, reporting, store. |
 | `@orc-brain/server`        | Fastify HTTP API + SSE; serves the SPA. Binds `127.0.0.1`.                                                                     |
-| `@orc-brain/cli`           | `orc` — a thin client over the HTTP API.                                                                                       |
-| `@orc-brain/ui`            | React + Vite + React Flow single-page app.                                                                                     |
+| `orc-brain` (CLI)          | `orc` — a thin client over the HTTP API. The package you `npm install -g`; ships the built web UI.                             |
+| `@orc-brain/ui`            | React + Vite + React Flow single-page app (published inside the `orc-brain` package).                                          |
 | `@orc-brain/plugin-linear` | The bundled Linear plugin (spec 003) — issue browse/import + status sync. Depends on `shared` only.                            |
 
 The full technical specification is the source of truth:
@@ -144,9 +145,9 @@ in doubt, the spec wins over code comments or this README.
 | Requirement          | Version | Notes                                                         |
 | -------------------- | ------- | ------------------------------------------------------------- |
 | **Node.js**          | ≥ 22    | `node --version`                                              |
-| **pnpm**             | ≥ 11    | `corepack enable && corepack prepare pnpm@latest --activate`  |
 | **git**              | any     | Used for worktrees and branch classification.                 |
 | **Claude Code auth** | current | A Claude subscription, authenticated via the Claude Code CLI. |
+| **pnpm**             | ≥ 11    | Only for building from source (contributors).                 |
 
 ### Authenticate Claude Code (subscription, not API key)
 
@@ -164,6 +165,33 @@ subscription credentials exist on your machine.
 
 ## Install
 
+### Option A — npm (recommended)
+
+One global package ships the CLI, the daemon, and the web UI:
+
+```bash
+npm install -g orc-brain
+```
+
+(`pnpm add -g orc-brain` works too.) This puts the `orc` command on your PATH.
+There is no database to provision and no services to start — state lives in a
+local `.orc/` directory (SQLite + audit log) created on first run.
+
+Verify your environment before running anything:
+
+```bash
+orc doctor          # checks: no API key in env, Node ≥ 22, git, disk space
+orc doctor --live   # also runs a live subscription/auth probe (uses a token)
+```
+
+You should see all ✓ checks. If `subscription billing (no API key)` fails, unset
+the offending variables it names.
+
+To upgrade later: `npm update -g orc-brain`. To try it without installing:
+`npx orc-brain doctor`.
+
+### Option B — from source (contributors)
+
 ```bash
 # 1. Clone
 git clone https://github.com/anplabs/orc-brain.git
@@ -179,43 +207,28 @@ pnpm install
 pnpm build
 ```
 
-That's it — no database to provision, no services to start. State lives in a
-local `.orc/` directory (SQLite + audit log) created on first run.
-
-Verify your environment before running anything:
-
-```bash
-pnpm orc doctor          # checks: no API key in env, Node ≥ 22, git, disk space
-pnpm orc doctor --live   # also runs a live subscription/auth probe (uses a token)
-```
-
-You should see all ✓ checks. If `subscription billing (no API key)` fails, unset
-the offending variables it names.
+In a source checkout, `pnpm orc <cmd>` is the equivalent of `orc <cmd>`
+(shorthand for `node packages/cli/dist/main.js <cmd>`).
 
 ---
 
 ## Run it locally
 
-There are two ways to run it. **Pick one.**
-
-### Option A — Serve mode (recommended for a real run)
-
-Builds are already done from the install step. Start the daemon; it serves both
-the API and the web UI from one port.
+Start the daemon; it serves both the API and the web UI from one port:
 
 ```bash
-pnpm serve                       # = node packages/cli/dist/main.js serve --port 4173
+orc serve                        # from source: pnpm serve
 ```
 
 Then open **<http://127.0.0.1:4173>** in your browser. The CLI talks to the same
 server:
 
 ```bash
-pnpm orc status                  # run state, budget, active sub-agents
-pnpm orc goal list
+orc status                       # run state, budget, active sub-agents
+orc goal list
 ```
 
-### Option B — Dev mode (hot reload while hacking)
+### Dev mode (source checkout only)
 
 Runs the server (`tsx watch`, port 4173) and the Vite dev server (port 5173,
 which proxies `/api` and the SSE stream to 4173) together:
@@ -227,9 +240,9 @@ pnpm dev
 Then open **<http://localhost:5173>** — the UI hot-reloads on change, and the
 API restarts on server-code changes.
 
-> The `orc` CLI is a thin HTTP client. Anywhere below, `pnpm orc <cmd>` is
-> shorthand for `node packages/cli/dist/main.js <cmd>`. If you prefer a bare
-> `orc`, add an alias: `alias orc="node $(pwd)/packages/cli/dist/main.js"`.
+> The `orc` CLI is a thin HTTP client over the local API. Anywhere below,
+> substitute `pnpm orc <cmd>` if you're running from a source checkout instead
+> of the npm install.
 
 ---
 
@@ -258,14 +271,14 @@ included) with the project's default budget/concurrency.
 ```bash
 # Register the repo (worktree mode isolates each scope on an orc/<goal>/<scope>
 # branch; in_repo works directly in your checkout).
-PROJ=$(pnpm --silent orc project add ~/git/paulo/dogfood-app --mode worktree | cut -d' ' -f1)
+PROJ=$(orc project add ~/git/paulo/dogfood-app --mode worktree | cut -d' ' -f1)
 
 # Ask for a feature — planning starts immediately.
-GOAL=$(pnpm --silent orc feature "$PROJ" "add CSV export to the reports page" | head -1)
+GOAL=$(orc feature "$PROJ" "add CSV export to the reports page" | head -1)
 
 # Review the proposed plan, then approve AND start in one step.
-pnpm orc plan show "$GOAL"
-pnpm orc approve "$GOAL" --start
+orc plan show "$GOAL"
+orc approve "$GOAL" --start
 ```
 
 Watch everything on the **Board** tab (a kanban of every agent across all
@@ -285,38 +298,38 @@ step also has a UI equivalent (Plan review, Run dashboard, Blocked drawer).
 
 ```bash
 # 1. Define a goal (repo-root defaults to the current directory).
-GOAL=$(pnpm --silent orc goal new \
+GOAL=$(orc goal new \
   --title "Add a health endpoint" \
   --objective "Expose GET /healthz returning 200 ok" \
   --repo /path/to/your/project)
 echo "goal: $GOAL"
 
 # 2. Plan it — a read-only Opus session proposes scopes + tasks.
-pnpm orc plan "$GOAL"
-pnpm orc plan show "$GOAL"        # review boundaries, tools, model tiers, budgets
+orc plan "$GOAL"
+orc plan show "$GOAL"        # review boundaries, tools, model tiers, budgets
 
 # 3. Approve the plan (all scopes, or --scope <id> for a subset).
-pnpm orc approve "$GOAL"
+orc approve "$GOAL"
 
 # 4. Start a run with a budget ceiling and concurrency.
-RUN=$(pnpm --silent orc run start "$GOAL" --budget 5 --concurrency 2)
+RUN=$(orc run start "$GOAL" --budget 5 --concurrency 2)
 echo "run: $RUN"
 
 # 5. Watch it live.
-pnpm orc status "$RUN" --watch    # or open the dashboard in the browser
-pnpm orc tail <task-id> -f        # stream one sub-agent's transcript
+orc status "$RUN" --watch    # or open the dashboard in the browser
+orc tail <task-id> -f        # stream one sub-agent's transcript
 
 # 6. Handle anything the safety layer blocked (if it did).
-pnpm orc blocked "$RUN"
-pnpm orc blocked resolve <esc-id> --deny --msg "use a PR instead"
+orc blocked "$RUN"
+orc blocked resolve <esc-id> --deny --msg "use a PR instead"
 
 # 7. Pause / resume / stop, and read the report.
-pnpm orc run pause "$RUN"
-pnpm orc run resume "$RUN"
-pnpm orc report "$RUN" --now
+orc run pause "$RUN"
+orc run resume "$RUN"
+orc report "$RUN" --now
 ```
 
-At any moment, **`pnpm orc panic`** SIGKILLs every worker immediately.
+At any moment, **`orc panic`** SIGKILLs every worker immediately.
 
 ---
 
@@ -508,6 +521,23 @@ Phase-4 hardening (rate-limit chaos, crash recovery, dirty-resume, escalation).
 
 New to the codebase or working with an AI assistant? Read
 **[`CLAUDE.md`](./CLAUDE.md)** for the architecture map, conventions, and gotchas.
+
+### Releasing (maintainers)
+
+Releases are published to npm by
+[`release.yml`](./.github/workflows/release.yml). Bump the `version` field in
+every `packages/*/package.json` (they move in lockstep), update
+`CHANGELOG.md`, then tag and push:
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+The workflow builds, tests, and runs `pnpm -r publish` (needs the `NPM_TOKEN`
+repository secret). To publish from a local checkout instead: `pnpm release`.
+The `prepack` hook of the `orc-brain` package copies the built UI
+(`packages/ui/dist`) into the tarball, so `pnpm build` must run first — both
+paths do.
 
 ---
 

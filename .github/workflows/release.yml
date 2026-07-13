@@ -1,0 +1,49 @@
+name: Release
+
+# Publishes every workspace package to npm when a version tag is pushed
+# (e.g. `git tag v1.1.0 && git push origin v1.1.0`). The tag must match the
+# version in the package.json files — `pnpm -r publish` skips versions that
+# already exist on the registry, so re-runs are safe.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+# Least privilege: read the repo, mint an OIDC token for npm provenance.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: build · test · publish to npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        # Version is read from the root package.json "packageManager" field.
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Publish
+        run: pnpm -r publish --access public --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

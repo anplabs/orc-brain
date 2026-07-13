@@ -82,7 +82,10 @@ Dependency direction: `shared` ← `core` ← {`server`, `cli`}; `ui` ← `share
 - **`packages/server`** — `index.ts` builds the Fastify app (all REST + the
   `/api/events` SSE endpoint). `main.ts` is the entrypoint. Binds `127.0.0.1`.
 - **`packages/cli`** — `index.ts` builds the commander tree; `client.ts` is the
-  fetch/SSE HTTP client; `main.ts` is the entrypoint.
+  fetch/SSE HTTP client; `main.ts` is the entrypoint. Published to npm as
+  **`orc-brain`** (bins `orc`/`orc-brain`); its `prepack` copies
+  `packages/ui/dist` into the tarball as `ui/`, and `resolveUiDist()` finds the
+  UI in both the published and monorepo layouts.
 - **`packages/ui`** — `App.tsx` (nav + pickers), `dashboard.tsx` (flow graph +
   inspector + blocked drawer), `screens.tsx` (plan/reports/audit/settings),
   `api.ts`, `live.ts` (SSE reducer), `markdown.ts`, `styles.css`.

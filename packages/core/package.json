@@ -1,8 +1,16 @@
 {
   "name": "@orc-brain/core",
   "version": "1.0.0",
-  "private": true,
+  "description": "Orchestration engine for orc-brain: planner, dispatch loop, safety layer, store.",
   "type": "module",
+  "license": "MIT",
+  "author": "Paulo Lima",
+  "homepage": "https://github.com/anplabs/orc-brain#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anplabs/orc-brain.git",
+    "directory": "packages/core"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,6 +18,15 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

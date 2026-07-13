@@ -10,7 +10,12 @@ on:
       - "v*.*.*"
   workflow_dispatch:
 
-# Least privilege: read the repo, mint an OIDC token for npm provenance.
+# Least privilege: read the repo, mint an OIDC token for npm trusted
+# publishing (which also provides provenance). Auth is OIDC-only — each
+# package must list this repo + `release.yml` as a Trusted Publisher on
+# npmjs.com (Settings → Trusted publishing). No NPM_TOKEN is used: npm
+# requires 2FA or a bypass-2FA token for token publishes, and bypass-2FA
+# tokens are deprecated (removal ~Jan 2027).
 permissions:
   contents: read
   id-token: write
@@ -32,7 +37,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://registry.npmjs.org
+          # No registry-url: it writes an ${NODE_AUTH_TOKEN} .npmrc entry,
+          # which shadows OIDC auth. pnpm publishes to npmjs.org by default.
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -45,5 +51,3 @@ jobs:
 
       - name: Publish
         run: pnpm -r publish --access public --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

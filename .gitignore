@@ -44,3 +44,4 @@ coverage/
 
 # Local-only spec framework (personal working docs, never pushed)
 .specs/
+.orc/

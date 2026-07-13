@@ -264,7 +264,7 @@ export default function App() {
                 setRunId(rid);
                 setTab("dashboard");
               }}
-              onStartRun={() => setShowNewRun(true)}
+              onStartRun={() => void startRun()}
             />
           )}
           {tab === "reports" && <Reports runId={runId} />}

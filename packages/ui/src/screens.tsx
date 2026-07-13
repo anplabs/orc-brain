@@ -253,11 +253,18 @@ export function PlanReview({
   if (!goalId)
     return <div className="empty">Select a goal to review its plan.</div>;
 
-  // Once approved, a scope no longer needs review — keep the screen focused
-  // on what still awaits a decision, with a toggle to inspect the rest.
+  // A scope stays visible until it is actually delegated. `proposed` awaits
+  // approval; `approved` is ready to run but hasn't been dispatched yet — both
+  // must stay on screen so an approved-but-not-yet-run plan is obvious and can
+  // be launched. Only delegated scopes (running/blocked/done/failed) collapse
+  // behind the toggle so the screen stays focused on what still needs action.
   const proposed = scopes.filter((s) => s.status === "proposed");
-  const reviewed = scopes.filter((s) => s.status !== "proposed");
-  const visibleScopes = showApproved ? scopes : proposed;
+  const approved = scopes.filter((s) => s.status === "approved");
+  const delegated = scopes.filter(
+    (s) => s.status !== "proposed" && s.status !== "approved",
+  );
+  const pending = [...proposed, ...approved];
+  const visibleScopes = showApproved ? scopes : pending;
 
   return (
     <div className="pad">
@@ -318,25 +325,23 @@ export function PlanReview({
             </button>
           )}
           {/* Once a plan is approved there are no proposed scopes left, so the
-              approve buttons above are disabled. Offer a direct way to launch
-              a run for the approved plan instead of hunting for "New run". */}
-          {onStartRun &&
-            !scopes.some((s) => s.status === "proposed") &&
-            scopes.some((s) => s.status === "approved") && (
-              <button className="primary" onClick={onStartRun}>
-                Start run
-              </button>
-            )}
+              approve buttons above are disabled. Launch a run for the approved
+              plan directly instead of hunting for "New run" in the topbar. */}
+          {onStartRun && approved.length > 0 && proposed.length === 0 && (
+            <button className="primary" onClick={onStartRun}>
+              Start run
+            </button>
+          )}
         </div>
       )}
-      {reviewed.length > 0 && (
+      {delegated.length > 0 && (
         <div className="toolbar">
           <span className="muted">
-            {proposed.length} awaiting approval · {reviewed.length} approved or
-            settled
+            {proposed.length} awaiting approval · {approved.length} approved,
+            ready to run · {delegated.length} delegated
           </span>
           <button onClick={() => setShowApproved((s) => !s)}>
-            {showApproved ? "Hide" : "Show"} approved ({reviewed.length})
+            {showApproved ? "Hide" : "Show"} delegated ({delegated.length})
           </button>
         </div>
       )}
@@ -348,8 +353,7 @@ export function PlanReview({
         </div>
       ) : visibleScopes.length === 0 ? (
         <div className="empty">
-          All scopes are approved and hidden — use “Show approved” to review
-          them.
+          All scopes have been delegated — use “Show delegated” to review them.
         </div>
       ) : (
         visibleScopes.map((s) => (
